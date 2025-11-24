@@ -1,0 +1,73 @@
+version: '3.9'
+
+services:
+  evolution-api:
+    container_name: evolution_api
+    image: evoapicloud/evolution-api:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # Server Configuration
+      SERVER_NAME: evolution
+      SERVER_TYPE: http
+      SERVER_PORT: 8080
+      SERVER_URL: http://localhost:8080
+
+      # Telemetry
+      TELEMETRY_ENABLED: false
+
+      # CORS
+      CORS_ORIGIN: '*'
+      CORS_METHODS: GET,POST,PUT,DELETE
+      CORS_CREDENTIALS: true
+
+      # Logs
+      LOG_LEVEL: ERROR,WARN,DEBUG,INFO,LOG,VERBOSE,DARK,WEBHOOKS
+      LOG_COLOR: true
+      REDIS_HOST: whatsapp-clone-redis-1
+      REDIS_URL: redis://whatsapp-clone-redis-1:6379
+
+      # Authentication - CHANGE THIS!
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+
+      # Database - Using PostgreSQL from main project
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://whatsapp_user:${DB_PASSWORD:-sua_senha_super_segura_aqui}@whatsapp-clone-postgres-1:5432/whatsapp_clone?schema=evolution_api
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_exchange
+      DATABASE_SAVE_DATA_INSTANCE: true
+      DATABASE_SAVE_DATA_NEW_MESSAGE: true
+      DATABASE_SAVE_MESSAGE_UPDATE: true
+      DATABASE_SAVE_DATA_CONTACTS: true
+      DATABASE_SAVE_DATA_CHATS: true
+      DATABASE_SAVE_DATA_LABELS: true
+      DATABASE_SAVE_DATA_HISTORIC: true
+
+      # Instance Settings
+      DEL_INSTANCE: false
+
+      # Webhook Configuration (will be configured per instance)
+      # WEBHOOK_GLOBAL_URL: http://whatsapp-clone-backend-1:3001/api/webhook/evolution
+      # WEBHOOK_GLOBAL_ENABLED: false
+      # WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: false
+
+      # QR Code Settings
+      QRCODE_LIMIT: 30
+      QRCODE_COLOR: '#198754'
+
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    networks:
+      - whatsapp-clone_default
+
+volumes:
+  evolution_instances:
+  evolution_store:
+
+
+networks:
+  whatsapp-clone_default:
+    external: true

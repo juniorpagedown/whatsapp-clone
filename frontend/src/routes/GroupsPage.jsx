@@ -4,8 +4,25 @@ import { io } from 'socket.io-client';
 import Header from '../components/Header';
 import GroupList from '../components/groups/GroupList.jsx';
 import { useGroups } from '../hooks/useGroups.js';
+import { getApiBaseUrl } from '../utils/api';
 
-const WS_URL = '';
+const resolveWsUrl = () => {
+  const envUrl = import.meta.env?.VITE_WS_URL?.trim();
+  if (envUrl) return envUrl;
+
+  const apiBase = getApiBaseUrl();
+  if (apiBase) {
+    return apiBase.replace(/^http/i, 'ws');
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/^http/i, 'ws');
+  }
+
+  return '';
+};
+
+const WS_URL = resolveWsUrl();
 
 const GroupsPage = () => {
   const navigate = useNavigate();
@@ -72,11 +89,6 @@ const GroupsPage = () => {
           preview: previewText,
           lastMessageAt: messageTimestamp,
           lastActivityAt: messageTimestamp,
-          isAuditada: false,
-          auditadaEm: null,
-          auditadaPor: null,
-          auditadaPorNome: null,
-          auditoriaAtual: null,
           unread:
             activeChatIdRef.current && existing.chatId === activeChatIdRef.current
               ? 0
@@ -85,8 +97,8 @@ const GroupsPage = () => {
 
         map.set(conversationId, updated);
         return Array.from(map.values()).sort((a, b) => {
-          const dateA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-          const dateB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+          const dateA = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+          const dateB = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
           return dateB - dateA;
         });
       });

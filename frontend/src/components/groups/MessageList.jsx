@@ -26,8 +26,6 @@ const MessageList = ({
   onLoadMore,
   loading,
   activeConversationId,
-  autoOpenFirstClassifiable = false,
-  onAutoOpenHandled = () => {},
   mentionLookup,
   highlightRange = null,
   previouslyAuditedRange = null
@@ -65,62 +63,6 @@ const MessageList = ({
       return acc;
     }, new Map());
   }, [messages]);
-
-  const featureEnabled = (import.meta.env?.VITE_FEATURE_CLASSIFICATION_BADGE ?? 'true') !== 'false';
-
-  const firstClassifiableMessageId = useMemo(() => {
-    if (!autoOpenFirstClassifiable || !featureEnabled) {
-      return null;
-    }
-
-    for (const message of messages) {
-      if (!message?.id) {
-        continue;
-      }
-
-      const rawText = message?.texto ?? message?.text ?? message?.body ?? '';
-      if (typeof rawText !== 'string' || rawText.trim().length === 0) {
-        continue;
-      }
-
-      const tipoMensagemRaw =
-        message?.tipo ||
-        message?.tipo_mensagem ||
-        message?.type ||
-        message?.messageType ||
-        null;
-      const tipoMensagem = typeof tipoMensagemRaw === 'string'
-        ? tipoMensagemRaw.toLowerCase()
-        : null;
-      const isTextMessage = tipoMensagem
-        ? ['text', 'texto', 'conversation'].includes(tipoMensagem)
-        : true;
-
-      if (!isTextMessage) {
-        continue;
-      }
-
-      return message.id;
-    }
-
-    return null;
-  }, [autoOpenFirstClassifiable, featureEnabled, messages]);
-
-  useEffect(() => {
-    if (!autoOpenFirstClassifiable) {
-      return undefined;
-    }
-
-    if (messages.length === 0) {
-      return undefined;
-    }
-
-    if (!firstClassifiableMessageId) {
-      onAutoOpenHandled?.();
-    }
-
-    return undefined;
-  }, [autoOpenFirstClassifiable, firstClassifiableMessageId, messages.length, onAutoOpenHandled]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -193,8 +135,6 @@ const MessageList = ({
           {dayMessages.map((message, index) => {
             const previous = dayMessages[index - 1] || null;
             const isNewSender = previous ? previous.isFromMe !== message.isFromMe : true;
-            const shouldAutoOpenClassification =
-              autoOpenFirstClassifiable && message?.id && message.id === firstClassifiableMessageId;
             const isHighlighted = isTimestampBetween(message.createdAt, highlightRange);
             const previouslyAudited = isTimestampBetween(message.createdAt, previouslyAuditedRange);
 
@@ -202,10 +142,7 @@ const MessageList = ({
               <MessageBubble
                 key={message.id || message.clientId}
                 message={message}
-                conversationIdFallback={activeConversationId}
                 isNewSender={isNewSender}
-                initiallyOpenClassification={shouldAutoOpenClassification}
-                onClassificationInitialOpen={onAutoOpenHandled}
                 mentionLookup={mentionLookup}
                 highlighted={isHighlighted}
                 previouslyAudited={previouslyAudited}

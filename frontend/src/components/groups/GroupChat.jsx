@@ -2,8 +2,6 @@ import React from 'react';
 import GroupAvatar from './GroupAvatar.jsx';
 import MessageList from './MessageList.jsx';
 import MessageComposer from './MessageComposer.jsx';
-import AuditoriaActions from '../Auditoria/AuditoriaActions.jsx';
-import AuditoriaMeta from '../Auditoria/AuditoriaMeta.jsx';
 
 const GroupChat = ({
   group,
@@ -12,37 +10,9 @@ const GroupChat = ({
   loadingMessages,
   onLoadMore,
   onSend,
-  auditInfo = null,
-  auditLoading = false,
-  auditError = null,
-  auditSuccess = null,
-  onRefreshAudit = () => {},
-  onFinalizeAudit = () => {},
-  auditFinalizing = false,
-  canFinalizeAudit = false,
-  showFinalizeButton = true,
-  bannerMessage = null,
-  autoOpenClassification = false,
-  onAutoOpenHandled = () => {},
-  highlightRange = null,
-  previouslyAuditedRange = null
+  highlightRange = null
 }) => {
-  const visibleMessages = React.useMemo(() => {
-    if (!auditInfo?.periodoInicio) {
-      return messages;
-    }
-    const startTime = new Date(auditInfo.periodoInicio).getTime();
-    if (Number.isNaN(startTime)) {
-      return messages;
-    }
-    return messages.filter((message) => {
-      const created = new Date(message.createdAt || message.timestamp || '').getTime();
-      if (Number.isNaN(created)) {
-        return true;
-      }
-      return created >= startTime;
-    });
-  }, [auditInfo?.periodoInicio, messages]);
+  const visibleMessages = messages;
 
   const mentionLookup = React.useMemo(() => {
     const map = new Map();
@@ -188,26 +158,8 @@ const GroupChat = ({
           </div>
         </div>
 
-        <AuditoriaActions
-          loading={auditLoading}
-          info={auditInfo}
-          error={auditError}
-          successMessage={auditSuccess}
-          onRefresh={onRefreshAudit}
-          onFinalize={onFinalizeAudit}
-          finalizing={auditFinalizing}
-          canFinalize={canFinalizeAudit}
-          showFinalizeButton={showFinalizeButton}
-        />
+        {/* Auditoria desativada */}
       </header>
-
-      {bannerMessage && (
-        <div className="border-b border-wa-system-yellow/40 bg-wa-system-yellow/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-wa-system-yellow">
-          {bannerMessage}
-        </div>
-      )}
-
-      <AuditoriaMeta group={group} info={auditInfo} />
 
       <MessageList
         messages={visibleMessages}
@@ -215,11 +167,8 @@ const GroupChat = ({
         onLoadMore={onLoadMore}
         loading={loadingMessages}
         activeConversationId={group.id}
-        autoOpenFirstClassifiable={autoOpenClassification}
-        onAutoOpenHandled={onAutoOpenHandled}
         mentionLookup={mentionLookup}
         highlightRange={highlightRange}
-        previouslyAuditedRange={previouslyAuditedRange}
       />
 
       <MessageComposer onSend={onSend} />

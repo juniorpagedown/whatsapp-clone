@@ -7,19 +7,17 @@ import React, {
 import {
   useNavigate,
   useOutletContext,
-  useParams,
-  useSearchParams
+  useParams
 } from 'react-router-dom';
 import GroupChat from '../components/groups/GroupChat.jsx';
 import { useGroupMessages } from '../hooks/useGroupMessages.js';
 import { buildApiUrl } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { concludeAudit, fetchOpenPeriod } from '../services/auditoriaApi.ts';
+// Auditoria desativada
 
 const GroupChatPage = () => {
   const { chatId: rawChatId } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const outletContext = useOutletContext();
   const { user } = useAuth();
 
@@ -36,7 +34,6 @@ const GroupChatPage = () => {
   const refetchGroups = outletContext?.refetchGroups;
   const groupMap = outletContext?.groupMap;
   const setGroups = outletContext?.setGroups;
-  const auditoriaReaberta = searchParams.get('auditoriaReaberta');
 
   const group = useMemo(() => {
     if (!decodedChatId) return null;
@@ -61,55 +58,19 @@ const GroupChatPage = () => {
   const [auditError, setAuditError] = useState(null);
   const [auditSuccess, setAuditSuccess] = useState(null);
   const [auditFinalizing, setAuditFinalizing] = useState(false);
-  const [autoOpenClassification, setAutoOpenClassification] = useState(false);
   const [reopenBanner, setReopenBanner] = useState(null);
 
   const conversationId = group?.id || null;
 
-  const previouslyAuditedRange = useMemo(() => {
-    if (!auditInfo?.auditoriaReabertaId) {
-      return null;
-    }
-    return {
-      from: auditInfo.auditoriaReabertaInicio || auditInfo.periodoInicio || null,
-      to: auditInfo.auditoriaReabertaFim || null
-    };
-  }, [auditInfo?.auditoriaReabertaFim, auditInfo?.auditoriaReabertaId, auditInfo?.auditoriaReabertaInicio, auditInfo?.periodoInicio]);
+  const previouslyAuditedRange = null;
 
-  const activeRange = useMemo(() => {
-    const fromParam = searchParams.get('from');
-    const toParam = searchParams.get('to');
-    if (!fromParam && !toParam) {
-      return null;
-    }
-    return {
-      from: fromParam,
-      to: toParam
-    };
-  }, [searchParams]);
+  const activeRange = null;
 
   const loadAuditInfo = useCallback(async () => {
-    if (!conversationId) {
-      setAuditInfo(null);
-      setAuditError(null);
-      setAuditLoading(false);
-      return;
-    }
-
-    setAuditLoading(true);
+    setAuditInfo(null);
     setAuditError(null);
-
-    try {
-      const period = await fetchOpenPeriod(conversationId);
-      setAuditInfo(period);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao carregar informações de auditoria';
-      setAuditInfo(null);
-      setAuditError(message);
-    } finally {
-      setAuditLoading(false);
-    }
-  }, [conversationId]);
+    setAuditLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!decodedChatId) {
@@ -117,95 +78,7 @@ const GroupChatPage = () => {
     }
   }, [decodedChatId, navigate]);
 
-  useEffect(() => {
-    if (!auditoriaReaberta || !decodedChatId) {
-      return;
-    }
-
-    let updatedState = false;
-
-    if (typeof setGroups === 'function') {
-      setGroups((prevGroups) => {
-        const reopenedAt = new Date().toISOString();
-        let found = false;
-
-        const updated = prevGroups.map((item) => {
-          if (item.chatId !== decodedChatId) {
-            return item;
-          }
-
-          found = true;
-          updatedState = true;
-
-          const rawLastMessage =
-            item.raw?.lastMessage ||
-            item.raw?.last_message ||
-            item.lastMessage ||
-            null;
-          const previewText =
-            rawLastMessage?.texto ||
-            rawLastMessage?.caption ||
-            item.raw?.ultimaMensagem ||
-            item.preview ||
-            '';
-          const lastMessageTimestamp =
-            rawLastMessage?.timestamp ||
-            item.raw?.ultimaMensagemTimestamp ||
-            item.lastMessageAt ||
-            null;
-
-          return {
-            ...item,
-            isAuditada: false,
-            auditadaEm: null,
-            auditadaPor: null,
-            auditadaPorNome: null,
-            auditoriaAtual: null,
-            preview: previewText,
-            lastMessageAt: lastMessageTimestamp,
-            lastActivityAt: lastMessageTimestamp || reopenedAt,
-            raw: item.raw
-              ? {
-                  ...item.raw,
-                  isAuditada: false,
-                  is_auditada: false,
-                  auditadaEm: null,
-                  auditada_em: null,
-                  auditadaPor: null,
-                  auditada_por: null
-                }
-              : item.raw
-          };
-        });
-
-        if (!found) {
-          return prevGroups;
-        }
-
-        return [...updated].sort((a, b) => {
-          if (a.isAuditada !== b.isAuditada) {
-            return a.isAuditada ? 1 : -1;
-          }
-
-          const dateA = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
-          const dateB = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
-          return dateB - dateA;
-        });
-      });
-    }
-
-    if (!updatedState && !group) {
-      return;
-    }
-
-    refetchGroups?.();
-    setAutoOpenClassification(true);
-    setReopenBanner('Auditoria reaberta! Revise as mensagens e reclasifique se necessário.');
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete('auditoriaReaberta');
-    setSearchParams(nextParams, { replace: true });
-  }, [auditoriaReaberta, decodedChatId, group, refetchGroups, searchParams, setGroups, setSearchParams]);
+  useEffect(() => {}, []);
 
   useEffect(() => {
     setAuditSuccess(null);
@@ -322,64 +195,14 @@ const GroupChatPage = () => {
     }
   }, [sendingError]);
 
-  const handleRefreshAudit = useCallback(() => {
-    setAuditSuccess(null);
-    loadAuditInfo();
-  }, [loadAuditInfo]);
+  const handleRefreshAudit = useCallback(() => {}, []);
 
-  const handleFinalizeAudit = useCallback(async () => {
-    if (!conversationId || !auditInfo) {
-      return;
-    }
+  const handleFinalizeAudit = useCallback(async () => {}, []);
 
-    if (!user?.id) {
-      setAuditError('Usuário sem permissão para concluir auditoria.');
-      return;
-    }
-
-    if (!auditInfo.totalMensagens || auditInfo.totalMensagens <= 0) {
-      setAuditError('Não há mensagens novas para auditar.');
-      return;
-    }
-
-    const observation = window.prompt('Observação (opcional):', '');
-
-    setAuditFinalizing(true);
-    setAuditError(null);
-
-    try {
-      await concludeAudit({
-        conversa_id: conversationId,
-        data_inicio: auditInfo.periodoInicio,
-        data_fim: new Date().toISOString(),
-        usuario_id: user.id,
-        qtd_mensagens: auditInfo.totalMensagens,
-        observacao: observation && observation.trim().length > 0 ? observation.trim() : undefined,
-        metadata: {
-          origem: 'groups_page',
-          mensagens_renderizadas: messageCount
-        }
-      });
-
-      setAuditSuccess('Auditoria concluída com sucesso.');
-      await loadAuditInfo();
-      refetchGroups?.();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Não foi possível concluir a auditoria';
-      setAuditError(message);
-    } finally {
-      setAuditFinalizing(false);
-    }
-  }, [conversationId, auditInfo, user?.id, messageCount, loadAuditInfo, refetchGroups]);
-
-  const handleAutoOpenHandled = useCallback(() => {
-    setAutoOpenClassification(false);
-  }, []);
-
-  const userCanAudit = user?.role === 'auditor' || user?.role === 'admin';
-  const pendingMessages = auditInfo?.totalMensagens ?? 0;
-  const groupAuditada = group?.isAuditada ?? false;
-  const canFinalizeAudit = Boolean(userCanAudit && !groupAuditada && pendingMessages > 0 && !auditFinalizing);
+  const userCanAudit = false;
+  const pendingMessages = 0;
+  const groupAuditada = false;
+  const canFinalizeAudit = false;
 
   useEffect(() => {
     if (!auditSuccess) {
@@ -412,8 +235,6 @@ const GroupChatPage = () => {
         canFinalizeAudit={canFinalizeAudit}
         showFinalizeButton={userCanAudit}
         bannerMessage={reopenBanner}
-        autoOpenClassification={autoOpenClassification}
-        onAutoOpenHandled={handleAutoOpenHandled}
         highlightRange={activeRange}
         previouslyAuditedRange={previouslyAuditedRange}
       />

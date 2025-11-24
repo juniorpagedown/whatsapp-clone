@@ -84,10 +84,6 @@ CREATE TABLE IF NOT EXISTS conversas (
     is_archived BOOLEAN DEFAULT FALSE,
     is_pinned BOOLEAN DEFAULT FALSE,
     metadata JSONB,
-    macro VARCHAR(150),
-    item VARCHAR(200),
-    classificado_por VARCHAR(120),
-    classificado_em TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT tipo_conversa CHECK (tipo IN ('individual', 'grupo')),
@@ -100,45 +96,6 @@ CREATE TABLE IF NOT EXISTS conversas (
 CREATE INDEX idx_conversas_chat_id ON conversas(chat_id);
 CREATE INDEX idx_conversas_tipo ON conversas(tipo);
 CREATE INDEX idx_conversas_ultima_mensagem ON conversas(ultima_mensagem_timestamp DESC);
-CREATE INDEX idx_conversas_macro_item ON conversas(macro, item);
-
--- Catálogo de classificação
-CREATE TABLE IF NOT EXISTS classificacao_catalogo (
-    id SERIAL PRIMARY KEY,
-    macro VARCHAR(150) NOT NULL,
-    item VARCHAR(200) NOT NULL,
-    pos JSONB DEFAULT '[]'::jsonb,
-    neg JSONB DEFAULT '[]'::jsonb,
-    embedding vector(1536),
-    ativo BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT classificacao_catalogo_macro_item_unique UNIQUE (macro, item)
-);
-
-CREATE INDEX idx_classificacao_catalogo_ativo
-    ON classificacao_catalogo(ativo) WHERE ativo = TRUE;
-CREATE INDEX idx_classificacao_catalogo_embedding_ivfflat
-    ON classificacao_catalogo USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
-
--- Histórico de classificações por conversa
-CREATE TABLE IF NOT EXISTS conversa_classificacao (
-    id SERIAL PRIMARY KEY,
-    conversa_id INTEGER NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
-    macro VARCHAR(150) NOT NULL,
-    item VARCHAR(200) NOT NULL,
-    origem VARCHAR(50) DEFAULT 'manual',
-    confianca SMALLINT CHECK (confianca BETWEEN 0 AND 100),
-    criado_por VARCHAR(120),
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_conversa_classificacao_conversa_created
-    ON conversa_classificacao(conversa_id, criado_em DESC);
-
-CREATE INDEX idx_conversa_classificacao_macro_item
-    ON conversa_classificacao(macro, item);
 
 
 -- Tabela de mensagens (principal)
@@ -175,30 +132,6 @@ CREATE INDEX idx_mensagens_tipo ON mensagens(tipo_mensagem);
 CREATE INDEX idx_mensagens_texto ON mensagens USING gin(to_tsvector('portuguese', texto));
 CREATE INDEX idx_mensagens_embedding ON mensagens USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX idx_mensagens_embedding_ivfflat ON mensagens USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-
--- Classificação manual por mensagem
-CREATE TABLE IF NOT EXISTS mensagem_classificacao (
-    id BIGSERIAL PRIMARY KEY,
-    message_id INTEGER NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
-    conversa_id INTEGER NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
-    macro TEXT NOT NULL,
-    item TEXT NOT NULL,
-    comentario TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT mensagem_classificacao_message_unique UNIQUE (message_id)
-);
-
-CREATE INDEX idx_mensagem_classificacao_conversa
-    ON mensagem_classificacao(conversa_id);
-
-CREATE INDEX idx_mensagem_classificacao_user
-    ON mensagem_classificacao(user_id);
-
-CREATE INDEX idx_mensagem_classificacao_macro_item
-    ON mensagem_classificacao(macro, item);
-
 
 -- Tabela de contexto de conversas
 CREATE TABLE IF NOT EXISTS conversa_contexto (
@@ -390,9 +323,6 @@ CREATE TRIGGER update_grupos_updated_at BEFORE UPDATE ON grupos
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_conversas_updated_at BEFORE UPDATE ON conversas
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_mensagem_classificacao_updated_at BEFORE UPDATE ON mensagem_classificacao
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Inserir dados de exemplo na base de conhecimento

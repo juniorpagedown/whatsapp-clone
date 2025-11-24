@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: whatsapp_clone
       POSTGRES_USER: whatsapp_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-sua_senha_super_segura_aqui}
+      POSTGRES_PASSWORD: Mr92uc73
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
@@ -32,17 +32,18 @@ services:
       - "3001:3001"
     environment:
       NODE_ENV: development
-      DB_HOST: postgres
+      DB_HOST: whatsapp-clone-postgres-1
       DB_PORT: 5432
       DB_NAME: whatsapp_clone
       DB_USER: whatsapp_user
-      DB_PASSWORD: ${DB_PASSWORD:-sua_senha_super_segura_aqui}
+      DB_PASSWORD: sua_senha_super_segura_aqui
       REDIS_URL: redis://redis:6379
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
-      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_API_URL: http://evolution_api:8080
+      EVOLUTION_API_KEY: RuiINRQRzIrkR4KUIT6yvGQkWZSa0en9
+      EVOLUTION_WEBHOOK_TOKEN: RuiINRQRzIrkR4KUIT6yvGQkWZSa0en9
+      EVOLUTION_WEBHOOK_ALLOW_NO_TOKEN: "true"
       ALLOW_SELF_REGISTRATION: true
     depends_on:
       postgres:
@@ -55,14 +56,19 @@ services:
 
   worker:
     build: ./backend
-    command: node src/worker.js
+    command: node workers/embedding.worker.js
     environment:
       NODE_ENV: development
-      DB_HOST: postgres
+      DB_HOST: whatsapp-clone-postgres-1
+      DB_PORT: 5432
+      DB_NAME: whatsapp_clone
+      DB_USER: whatsapp_user
+      DB_PASSWORD: sua_senha_super_segura_aqui
       REDIS_URL: redis://redis:6379
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      EVOLUTION_API_URL: http://evolution_api:8080
+      EVOLUTION_API_KEY: RuiINRQRzIrkR4KUIT6yvGQkWZSa0en9
     depends_on:
       - postgres
       - redis

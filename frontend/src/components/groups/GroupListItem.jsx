@@ -24,18 +24,12 @@ const formatRelativeTime = (value) => {
 
 const GroupListItem = ({ group, active, onClick }) => {
   const meta = useMemo(() => {
-    const basePreview = group.isAuditada
-      ? (group.auditoriaAtual?.notes || group.preview || '')
-      : (group.preview || '');
-
-    const preview = basePreview || '';
+    const preview = group.preview || '';
     const participants = group.participantsLabel || (Array.isArray(group.participants)
       ? group.participants.filter(Boolean).slice(0, 5).join(', ')
       : '');
 
-    const referenceTimestamp = group.isAuditada
-      ? (group.auditadaEm || group.lastActivityAt || group.lastMessageAt)
-      : (group.lastActivityAt || group.lastMessageAt);
+    const referenceTimestamp = group.lastActivityAt || group.lastMessageAt;
 
     return {
       preview: preview.length > 120 ? `${preview.slice(0, 120)}…` : preview,
@@ -48,9 +42,6 @@ const GroupListItem = ({ group, active, onClick }) => {
     group.participants,
     group.lastMessageAt,
     group.lastActivityAt,
-    group.auditadaEm,
-    group.auditoriaAtual,
-    group.isAuditada,
     group.unread
   ]);
 
@@ -75,12 +66,6 @@ const GroupListItem = ({ group, active, onClick }) => {
           </span>
           <span className="flex-shrink-0 text-xs text-wa-text-secondary">{meta.timestamp}</span>
         </div>
-        {group.isAuditada && (
-          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-wa-bubble-in px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-wa-text-secondary">
-            Auditada
-            {group.auditadaPorNome ? ` · ${group.auditadaPorNome}` : ''}
-          </span>
-        )}
         {meta.participants && (
           <p className="mt-1 truncate text-xs uppercase tracking-wide text-wa-link">
             {meta.participants}

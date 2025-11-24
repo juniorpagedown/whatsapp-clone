@@ -11,9 +11,7 @@ import LoginPage from './routes/LoginPage';
 import GroupsPage from './routes/GroupsPage.jsx';
 import GroupChatPage from './routes/GroupChatPage.jsx';
 import DashboardPage from './routes/DashboardPage.jsx';
-import AuditHistoryPage from './routes/AuditHistoryPage.tsx';
 import ContextoPage from './routes/ContextoPage.tsx';
-import AdminClassificacoesPage from './routes/AdminClassificacoesPage.tsx';
 
 const App = () => (
   <BrowserRouter>
@@ -52,14 +50,6 @@ const App = () => (
         />
 
         <Route
-          path="/auditoria"
-          element={
-            <ProtectedRoute>
-              <AuditHistoryPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/contexto"
           element={
             <ProtectedRoute>
@@ -67,15 +57,6 @@ const App = () => (
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/admin/classificacoes"
-          element={
-            <ProtectedRoute>
-              <AdminClassificacoesPage />
-            </ProtectedRoute>
-          }
-        />
-
         <Route path="*" element={<Navigate to="/groups" replace />} />
       </Routes>
     </AuthProvider>

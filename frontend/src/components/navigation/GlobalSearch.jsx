@@ -27,7 +27,7 @@ const GlobalSearch = ({ onSearch }) => {
       <input
         type="search"
         className="w-full rounded-lg border border-wa-border bg-wa-panel pl-9 pr-3 py-2 text-sm text-wa-text-primary outline-none transition-colors focus:border-wa-primary focus:ring-2 focus:ring-wa-primary/20"
-        placeholder="Buscar conversas, contatos ou auditorias…"
+        placeholder="Buscar conversas ou contatos…"
         value={term}
         onChange={(event) => setTerm(event.target.value)}
         aria-label="Buscar em todo o sistema"

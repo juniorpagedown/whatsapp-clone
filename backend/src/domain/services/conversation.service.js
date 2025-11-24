@@ -39,8 +39,21 @@ const buildFilters = ({ search, tipo }) => {
   }
 
   if (tipo) {
-    values.push(tipo);
-    filters.push(`c.tipo = $${values.length}`);
+    // Permite múltiplos tipos separados por vírgula, ou a palavra 'all/todos' para trazer tudo
+    const normalized = String(tipo)
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    const uniqueTypes = [...new Set(normalized)];
+
+    // Se incluir 'all' ou 'todos', não aplicamos filtro de tipo
+    const wantsAll = uniqueTypes.some((t) => t === 'all' || t === 'todos');
+
+    if (!wantsAll && uniqueTypes.length) {
+      values.push(uniqueTypes);
+      filters.push(`c.tipo = ANY($${values.length}::text[])`);
+    }
   }
 
   const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -55,15 +68,9 @@ const buildConversationQuery = ({
   offset
 }) => {
   const values = [...baseValues];
-  const auditFlagIdx = values.length + 1;
-  const appliedWhere = whereClause
-    ? `${whereClause} AND c.is_auditada = $${auditFlagIdx}`
-    : `WHERE c.is_auditada = $${auditFlagIdx}`;
+  const limitIdx = values.length + 1;
+  const offsetIdx = values.length + 2;
 
-  const limitIdx = auditFlagIdx + 1;
-  const offsetIdx = auditFlagIdx + 2;
-
-  values.push(isAuditada);
   values.push(limit);
   values.push(offset);
 
@@ -81,29 +88,7 @@ const buildConversationQuery = ({
         c.metadata,
         c.created_at,
         c.updated_at,
-        c.is_auditada,
-        c.auditada_em,
-        c.auditada_por,
-        usuario_auditada_por.nome AS auditada_por_nome,
-        CASE
-          WHEN auditoria_atual.id IS NULL THEN NULL
-          ELSE jsonb_build_object(
-            'id', auditoria_atual.id,
-            'conversa_id', c.id,
-            'started_at', auditoria_atual.data_inicio,
-            'finalized_at', auditoria_atual.data_fim,
-            'last_read_message_id', NULL,
-            'auditor_user_id', auditoria_atual.usuario_id,
-            'auditor_nome', auditoria_auditor.nome,
-            'finalized_by', NULL,
-            'finalized_by_nome', NULL,
-            'notes', auditoria_atual.observacao,
-            'status', auditoria_atual.status,
-            'qtd_mensagens', auditoria_atual.qtd_mensagens,
-            'metadata', auditoria_atual.metadata
-          )
-        END AS auditoria_atual_json,
-        COALESCE((msg_stats).ultima_mensagem_timestamp, c.auditada_em, c.updated_at) AS last_activity,
+        COALESCE((msg_stats).ultima_mensagem_timestamp, c.updated_at) AS last_activity,
         ct_data,
         g_data,
         participants_data.participants,
@@ -167,23 +152,6 @@ const buildConversationQuery = ({
     ) participants_data ON true
       LEFT JOIN LATERAL (
         SELECT
-          aud.id,
-          aud.data_inicio,
-          aud.data_fim,
-          aud.usuario_id,
-          aud.qtd_mensagens,
-          aud.observacao,
-          aud.status,
-          aud.metadata
-        FROM auditorias aud
-        WHERE aud.conversa_id = c.id
-        ORDER BY aud.data_fim DESC
-        LIMIT 1
-      ) auditoria_atual ON true
-      LEFT JOIN usuarios auditoria_auditor ON auditoria_auditor.id = auditoria_atual.usuario_id
-      LEFT JOIN usuarios usuario_auditada_por ON usuario_auditada_por.id = c.auditada_por
-      LEFT JOIN LATERAL (
-        SELECT
           COUNT(*) AS total_mensagens,
           MAX(m.timestamp) AS ultima_mensagem_timestamp,
           (
@@ -209,9 +177,9 @@ const buildConversationQuery = ({
         FROM mensagens m
         WHERE m.conversa_id = c.id
       ) msg_stats ON true
-      ${appliedWhere}
+      ${whereClause ? whereClause : ''}
       ORDER BY
-        COALESCE((msg_stats).ultima_mensagem_timestamp, c.auditada_em, c.updated_at) DESC NULLS LAST
+        COALESCE((msg_stats).ultima_mensagem_timestamp, c.updated_at) DESC NULLS LAST
       LIMIT $${limitIdx}
       OFFSET $${offsetIdx}
     )
@@ -227,11 +195,6 @@ const buildConversationQuery = ({
       metadata,
       created_at,
       updated_at,
-      is_auditada,
-      auditada_em,
-      auditada_por,
-      auditada_por_nome,
-      auditoria_atual_json,
       last_activity,
       row_to_json(ct_data) AS contato,
       row_to_json(g_data) AS grupo,
@@ -261,40 +224,22 @@ const listConversations = async ({ search, tipo, limit, offset }) => {
   }
 
   const { whereClause, values } = buildFilters({ search, tipo });
-  const auditedQuery = buildConversationQuery({
-    whereClause,
-    baseValues: values,
-    isAuditada: false,
-    limit: safeLimit,
-    offset: safeOffset
-  });
-
-  const nonAuditedQuery = buildConversationQuery({
-    whereClause,
-    baseValues: values,
-    isAuditada: true,
-    limit: safeLimit,
-    offset: safeOffset
-  });
-
   try {
-    const [recentResult, auditedResult] = await Promise.all([
-      pool.query(auditedQuery.query, auditedQuery.values),
-      pool.query(nonAuditedQuery.query, nonAuditedQuery.values)
-    ]);
+    const { query, values: queryValues } = buildConversationQuery({
+      whereClause,
+      baseValues: values,
+      isAuditada: null,
+      limit: safeLimit,
+      offset: safeOffset
+    });
 
-    const rows = [
-      ...recentResult.rows,
-      ...auditedResult.rows
-    ];
+    const resultDb = await pool.query(query, queryValues);
 
-    const recentTotal = recentResult.rows.length
-      ? Number(recentResult.rows[0].total_count)
+    const rows = resultDb.rows;
+
+    const total = rows.length
+      ? Number(rows[0].total_count)
       : 0;
-    const auditedTotal = auditedResult.rows.length
-      ? Number(auditedResult.rows[0].total_count)
-      : 0;
-    const total = recentTotal + auditedTotal;
 
     const result = {
       total,
@@ -312,11 +257,6 @@ const listConversations = async ({ search, tipo, limit, offset }) => {
         metadata: row.metadata,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
-        isAuditada: row.is_auditada,
-        auditadaEm: row.auditada_em,
-        auditadaPor: row.auditada_por,
-        auditadaPorNome: row.auditada_por_nome,
-        auditoriaAtual: row.auditoria_atual_json || null,
         lastActivityAt: row.last_activity,
         contato: row.contato,
         grupo: row.grupo,

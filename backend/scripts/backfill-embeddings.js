@@ -7,7 +7,6 @@ const logger = require('../src/shared/config/logger.config');
 const embeddingService = require('../src/domain/services/embedding.service');
 const {
   generateKnowledgeBaseEmbedding,
-  generateCatalogEmbedding,
   vectorToPg
 } = embeddingService;
 
@@ -387,56 +386,11 @@ async function backfillConhecimentoBase() {
   console.log(`   📊 Sucesso: ${sucesso} | Falhas: ${falhas}`);
 }
 
-async function backfillCatalogoClassificacao() {
-  console.log('\n🔁 Iniciando backfill de embeddings para classificacao_catalogo...');
-  const { rows } = await pool.query(
-    `
-      SELECT id, macro, item, pos, neg
-      FROM classificacao_catalogo
-      WHERE embedding IS NULL
-        AND ativo = TRUE
-    `
-  );
-
-  if (rows.length === 0) {
-    console.log('   ℹ️  Nenhum registro pendente.');
-    return;
-  }
-
-  let sucesso = 0;
-  let falhas = 0;
-
-  for (const row of rows) {
-    try {
-      const resultado = await generateCatalogEmbedding({
-        catalogId: row.id,
-        macro: row.macro,
-        item: row.item,
-        pos: row.pos,
-        neg: row.neg
-      });
-
-      if (resultado.status === 'ok') {
-        sucesso += 1;
-      } else {
-        falhas += 1;
-      }
-    } catch (error) {
-      falhas += 1;
-      console.warn(`   ⚠ Falha ao processar catálogo ${row.id}: ${error.message}`);
-    }
-  }
-
-  console.log(`✅ Backfill de catálogo concluído.`);
-  console.log(`   📊 Sucesso: ${sucesso} | Falhas: ${falhas}`);
-}
-
 async function main() {
   try {
     await validateSetup();
     console.log('🚀 Iniciando backfill de embeddings...\n');
 
-    await backfillCatalogoClassificacao();
     await backfillMensagens();
     await backfillConhecimentoBase();
 
@@ -458,6 +412,5 @@ if (require.main === module) {
 module.exports = {
   backfillMensagens,
   backfillConhecimentoBase,
-  backfillCatalogoClassificacao,
   main
 };

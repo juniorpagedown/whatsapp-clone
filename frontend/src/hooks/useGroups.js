@@ -97,10 +97,6 @@ const normalizeGroup = (group) => {
   const chatId = group.chatId || group.chat_id;
   const isGroup = group.tipo === 'grupo' || (chatId && chatId.endsWith('@g.us'));
 
-  if (!isGroup) {
-    return null;
-  }
-
   const parseJsonIfNeeded = (value) => {
     if (typeof value !== 'string') {
       return value;
@@ -115,57 +111,28 @@ const normalizeGroup = (group) => {
   const conversationMetadata = parseJsonIfNeeded(group.metadata);
   const groupMetadata = parseJsonIfNeeded(group?.grupo?.metadata);
 
-  const isAuditada = Boolean(
-    group?.isAuditada ??
-      group?.is_auditada ??
-      group?.raw?.isAuditada ??
-      group?.raw?.is_auditada
-  );
-
-  const auditadaEm =
-    group?.auditadaEm ??
-    group?.auditada_em ??
-    group?.raw?.auditadaEm ??
-    group?.raw?.auditada_em ??
-    null;
-
-  const auditadaPor =
-    group?.auditadaPor ??
-    group?.auditada_por ??
-    group?.raw?.auditadaPor ??
-    group?.raw?.auditada_por ??
-    null;
-
-  const auditadaPorNome =
-    group?.auditadaPorNome ??
-    group?.auditada_por_nome ??
-    group?.raw?.auditadaPorNome ??
-    group?.raw?.auditada_por_nome ??
-    null;
-
-  const auditoriaAtual =
-    group?.auditoriaAtual ??
-    group?.auditoria_atual ??
-    group?.auditoria_atual_json ??
-    group?.raw?.auditoriaAtual ??
-    group?.raw?.auditoria_atual_json ??
-    null;
+  const contactName =
+    group?.contato?.nome ||
+    group?.contato?.phone ||
+    conversationMetadata?.chatName ||
+    conversationMetadata?.name ||
+    (chatId ? chatId.split('@')[0] : 'Contato');
 
   // Priorizar grupo.nome (nome real do grupo) e ignorar metadata.chatName (que pode ser o nome do participante)
   // Tentar diferentes possíveis caminhos onde o nome do grupo pode estar
   let rawName =
-    group?.grupo?.nome ||           // Nome do objeto grupo (vindo do LEFT JOIN)
-    group?.nome ||                  // Nome direto no objeto
-    conversationMetadata?.subject ||     // Nome no metadata (Evolution API)
-    conversationMetadata?.chatName ||    // chatName no metadata
-    conversationMetadata?.name ||        // Alternativa no metadata
-    group?.raw?.grupo?.nome ||      // Fallback para raw
-    'Grupo Sem Nome';
+    group?.grupo?.nome || // Nome do objeto grupo (vindo do LEFT JOIN)
+    group?.nome || // Nome direto no objeto
+    conversationMetadata?.subject || // Nome no metadata (Evolution API)
+    conversationMetadata?.chatName || // chatName no metadata
+    conversationMetadata?.name || // Alternativa no metadata
+    group?.raw?.grupo?.nome || // Fallback para raw
+    contactName ||
+    (isGroup ? 'Grupo Sem Nome' : 'Contato');
 
   // Se o nome for igual ao chatId (um JID do WhatsApp), significa que não temos nome real
-  // Nesse caso, melhor mostrar "Grupo Sem Nome"
   if (rawName === chatId || (chatId && rawName.startsWith(chatId.replace('@g.us', '')))) {
-    rawName = 'Grupo Sem Nome';
+    rawName = isGroup ? 'Grupo Sem Nome' : contactName;
   }
 
   const participants = Array.isArray(group.participants)
@@ -175,7 +142,7 @@ const normalizeGroup = (group) => {
     : [];
 
   const parts = rawName.split(' - ');
-  const groupDisplayName = parts[0]?.trim() || rawName;
+  const groupDisplayName = isGroup ? parts[0]?.trim() || rawName : contactName || rawName;
   const fallbackParticipants = parts.length > 1 ? parts.slice(1).map((item) => item.trim()) : [];
   const participantNames = participants.length ? participants : fallbackParticipants;
 
@@ -191,21 +158,13 @@ const normalizeGroup = (group) => {
   let lastActivityAt =
     group?.lastActivityAt ||
     group?.last_activity ||
-    auditadaEm ||
     lastTimestamp;
 
-  if (isAuditada) {
-    previewText = '';
-    if (auditoriaAtual?.periodoInicio) {
-      lastActivityAt = auditoriaAtual.periodoInicio;
-    }
-  } else {
-    previewText =
-      lastMessage?.texto ||
-      lastMessage?.caption ||
-      group.ultimaMensagem ||
-      '';
-  }
+  previewText =
+    lastMessage?.texto ||
+    lastMessage?.caption ||
+    group.ultimaMensagem ||
+    '';
 
   const participantsLabel = participantNames.join(', ');
 
@@ -247,11 +206,8 @@ const normalizeGroup = (group) => {
     lastActivityAt,
     unread: group.unread ?? group.unreadCount ?? 0,
     avatarUrl,
-    isAuditada,
-    auditadaEm,
-    auditadaPor,
-    auditadaPorNome,
-    auditoriaAtual,
+    isGroup,
+    tipo: group.tipo,
     raw: group
   };
 };
@@ -277,7 +233,7 @@ export const useGroups = () => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(buildApiUrl(`/api/conversas?tipo=grupo&limit=${GROUP_FETCH_LIMIT}`), {
+      const response = await fetch(buildApiUrl(`/api/conversas?tipo=all&limit=${GROUP_FETCH_LIMIT}`), {
         signal: controller.signal,
         headers
       });
@@ -308,9 +264,6 @@ export const useGroups = () => {
           return [...acc, current];
         }, [])
         .sort((a, b) => {
-          if (a.isAuditada !== b.isAuditada) {
-            return a.isAuditada ? 1 : -1;
-          }
           const dateA = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
           const dateB = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
           return dateB - dateA;

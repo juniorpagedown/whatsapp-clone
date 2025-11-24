@@ -36,17 +36,6 @@ Essas rotas **exigem um token JWT válido** no header `Authorization: Bearer <to
 | POST | `/api/auth/change-password` | Troca senha do usuário | Qualquer autenticado |
 | POST | `/api/auth/logout` | Faz logout do usuário | Qualquer autenticado |
 
-### 5. Administração do Catálogo de Classificações
-| Método | Rota | Descrição | Role Mínima |
-|--------|------|-----------|-------------|
-| GET | `/api/classificacoes` | Lista classificações com filtros e paginação | Admin |
-| POST | `/api/classificacoes` | Cria nova classificação | Admin |
-| PATCH | `/api/classificacoes/:id` | Atualiza uma classificação existente | Admin |
-| DELETE | `/api/classificacoes/:id` | Realiza soft delete da classificação | Admin |
-| POST | `/api/classificacoes/:id/toggle` | Alterna flag de ativo/inativo | Admin |
-| POST | `/api/classificacoes/import` | Importa catálogo via CSV (multipart) | Admin |
-| GET | `/api/classificacoes/export` | Exporta catálogo vigente em CSV | Admin |
-
 ---
 
 ## 🌐 Rotas Públicas (Sem Autenticação)

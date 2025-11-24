@@ -43,7 +43,7 @@ const GroupList = ({
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-wa-bubble-in text-lg text-wa-text-primary">
             👥
           </div>
-          <span className="text-base font-medium text-wa-text-primary">Grupos</span>
+          <span className="text-base font-medium text-wa-text-primary">Conversas</span>
         </div>
       </header>
 
@@ -93,10 +93,8 @@ const GroupList = ({
         ) : visibleGroups.length === 0 ? (
           // Mensagem de "Nenhum Grupo"
           <div className="flex h-full flex-col items-center justify-center px-6 text-center text-wa-text-secondary">
-            <p className="text-sm">Nenhum grupo aguardando auditoria.</p>
-            <p className="text-xs text-wa-text-secondary/70">
-              Assim que novas mensagens chegarem, as conversas reaparecem aqui automaticamente.
-            </p>
+            <p className="text-sm">Nenhuma conversa encontrada.</p>
+            <p className="text-xs text-wa-text-secondary/70">Envie ou receba mensagens para começar.</p>
           </div>
         ) : (
           renderSection('Conversas Recentes', visibleGroups)

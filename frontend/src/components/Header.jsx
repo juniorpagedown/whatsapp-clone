@@ -43,17 +43,6 @@ const Header = () => {
         </button>
         <button
           type="button"
-          onClick={() => navigate('/auditoria')}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            isActive('/auditoria')
-              ? 'bg-wa-bubble-in text-wa-text-primary'
-              : 'text-wa-text-secondary hover:bg-wa-panel hover:text-wa-text-primary'
-          }`}
-        >
-          Auditoria
-        </button>
-        <button
-          type="button"
           onClick={() => navigate('/contexto')}
           className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
             isActive('/contexto')
@@ -63,19 +52,6 @@ const Header = () => {
         >
           Contexto
         </button>
-        {user?.role === 'admin' && (
-          <button
-            type="button"
-            onClick={() => navigate('/admin/classificacoes')}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              isActive('/admin/classificacoes')
-                ? 'bg-wa-bubble-in text-wa-text-primary'
-                : 'text-wa-text-secondary hover:bg-wa-panel hover:text-wa-text-primary'
-            }`}
-          >
-            Classificações
-          </button>
-        )}
         <button
           type="button"
           onClick={() => navigate('/dashboard')}

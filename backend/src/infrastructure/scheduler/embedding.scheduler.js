@@ -10,12 +10,9 @@ const batchSize = parseInt(process.env.EMBEDDING_BACKFILL_BATCH || '50', 10);
 const maxPerRun = parseInt(process.env.EMBEDDING_BACKFILL_MAX_PER_RUN || '500', 10);
 const cronExpression = process.env.EMBEDDING_BACKFILL_CRON || '0 * * * *'; // a cada hora
 const cronKnowledgeExpression = process.env.EMBEDDING_KB_CRON || '30 2 * * *'; // diariamente às 02:30
-const catalogBatchSize = parseInt(process.env.EMBEDDING_CATALOG_BATCH || batchSize.toString(), 10);
-const cronCatalogExpression = process.env.EMBEDDING_CATALOG_CRON || '0 3 * * *'; // diariamente às 03:00
 
 let isBackfillRunning = false;
 let isKnowledgeRunning = false;
-let isCatalogRunning = false;
 
 const addMessageJobs = async (rows) => {
   if (!rows.length) {
@@ -38,18 +35,6 @@ const addKnowledgeJobs = async (rows) => {
     EMBEDDING_JOB.KNOWLEDGE_BASE,
     { knowledgeId: row.id },
     { jobId: `knowledge:${row.id}` }
-  )));
-};
-
-const addCatalogJobs = async (rows) => {
-  if (!rows.length) {
-    return;
-  }
-
-  await Promise.all(rows.map((row) => embeddingQueue.add(
-    EMBEDDING_JOB.CATALOG,
-    { catalogId: row.id },
-    { jobId: `catalog:${row.id}` }
   )));
 };
 
@@ -146,61 +131,6 @@ async function enqueueKnowledgeBaseEmbeddings() {
   }
 }
 
-async function enqueueCatalogEmbeddings() {
-  if (!isFeatureEnabled()) {
-    return;
-  }
-
-  if (isCatalogRunning) {
-    logger.warn('Scheduler: backfill de catálogo já em execução, pulando ciclo');
-    return;
-  }
-
-  isCatalogRunning = true;
-
-  try {
-    let total = 0;
-
-    while (total < maxPerRun) {
-      const { rows } = await pool.query(
-        `
-          SELECT id
-          FROM classificacao_catalogo
-          WHERE ativo = TRUE
-            AND embedding IS NULL
-          ORDER BY id
-          LIMIT $1
-        `,
-        [catalogBatchSize]
-      );
-
-      if (!rows.length) {
-        if (total === 0) {
-          logger.debug('Scheduler: catálogo sem pendências de embedding');
-        }
-        break;
-      }
-
-      await addCatalogJobs(rows);
-      total += rows.length;
-
-      if (rows.length < catalogBatchSize) {
-        break;
-      }
-    }
-
-    if (total > 0) {
-      logger.info('Scheduler: catálogo enfileirado para embeddings', {
-        total
-      });
-    }
-  } catch (error) {
-    logger.error('Scheduler: erro ao enfileirar catálogo', { error: error.message });
-  } finally {
-    isCatalogRunning = false;
-  }
-}
-
 function startEmbeddingScheduler() {
   const schedulerEnabled = String(process.env.EMBEDDING_SCHEDULER_ENABLED || 'true').toLowerCase() !== 'false';
 
@@ -226,12 +156,6 @@ function startEmbeddingScheduler() {
     });
   });
 
-  cron.schedule(cronCatalogExpression, () => {
-    enqueueCatalogEmbeddings().catch((error) => {
-      logger.error('Scheduler: erro inesperado no ciclo de catálogo', { error: error.message });
-    });
-  });
-
   // Executa uma vez na inicialização
   enqueueMissingMessageEmbeddings().catch((error) => {
     logger.error('Scheduler: erro inicial ao enfileirar mensagens', { error: error.message });
@@ -241,23 +165,16 @@ function startEmbeddingScheduler() {
     logger.error('Scheduler: erro inicial ao enfileirar conhecimento', { error: error.message });
   });
 
-  enqueueCatalogEmbeddings().catch((error) => {
-    logger.error('Scheduler: erro inicial ao enfileirar catálogo', { error: error.message });
-  });
-
   logger.info('Scheduler de embeddings iniciado', {
     cronExpression,
     cronKnowledgeExpression,
-    cronCatalogExpression,
     batchSize,
-    maxPerRun,
-    catalogBatchSize
+    maxPerRun
   });
 }
 
 module.exports = {
   startEmbeddingScheduler,
   enqueueMissingMessageEmbeddings,
-  enqueueKnowledgeBaseEmbeddings,
-  enqueueCatalogEmbeddings
+  enqueueKnowledgeBaseEmbeddings
 };

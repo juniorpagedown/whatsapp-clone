@@ -682,7 +682,7 @@ const extractMessageData = (payload) => {
     message.remoteJid ||
     message.from ||
     message.to ||
-    chatId;
+    null;
 
   // Para grupos, priorizar o subject (nome do grupo) ao invés de pushName (nome do participante)
   const isGroupChat = Boolean(chatId && chatId.includes('@g.us'));
@@ -761,11 +761,20 @@ const extractMessageData = (payload) => {
     payload?.id ||
     `evolution-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+  const extendedText =
+    message.message?.extendedTextMessage?.text ||
+    message.extendedTextMessage?.text ||
+    message.message?.extendedTextMessage?.caption ||
+    message.extendedTextMessage?.caption ||
+    null;
+
   const text =
     message.body ||
     message.text ||
     message.message?.conversation ||
+    extendedText ||
     message.caption ||
+    message.message?.imageMessage?.caption ||
     message.text?.body ||
     message.content ||
     null;
@@ -924,6 +933,16 @@ const handleEvolutionWebhook = async (req, res, next) => {
 
         if (!parsed.chatId) {
           logger.warn('Webhook Evolution: chatId ausente', { event });
+          continue;
+        }
+
+        // Ignorar eventos que não carregam conteúdo relevante (ex.: acks/status sem texto ou mídia)
+        if (!parsed.text && !parsed.caption && !parsed.mediaUrl) {
+          logger.debug('Webhook Evolution: evento sem conteúdo ignorado', {
+            messageId: parsed.messageId,
+            tipo: parsed.tipoMensagem,
+            isFromMe: parsed.isFromMe
+          });
           continue;
         }
 
@@ -1101,10 +1120,7 @@ const handleEvolutionWebhook = async (req, res, next) => {
         await client.query(
           `
             UPDATE conversas
-               SET is_auditada = FALSE,
-                   auditada_em = NULL,
-                   auditada_por = NULL,
-                   updated_at = NOW()
+               SET updated_at = NOW()
              WHERE id = $1
           `,
           [conversaId]

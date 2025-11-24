@@ -6,15 +6,13 @@ const logger = require('../src/shared/config/logger.config');
 const { embeddingQueue, EMBEDDING_JOB } = require('../src/infrastructure/queues/embedding.queue');
 const {
   generateMessageEmbedding,
-  generateKnowledgeBaseEmbedding,
-  generateCatalogEmbedding
+  generateKnowledgeBaseEmbedding
 } = require('../src/domain/services/embedding.service');
 const pool = require('../src/infrastructure/database/postgres');
 const { closeRedis } = require('../src/infrastructure/cache/redis');
 
 const messageConcurrency = parseInt(process.env.QUEUE_EMBEDDING_CONCURRENCY, 10) || 5;
 const knowledgeConcurrency = parseInt(process.env.QUEUE_KB_CONCURRENCY || process.env.QUEUE_EMBEDDING_CONCURRENCY, 10) || 3;
-const catalogConcurrency = parseInt(process.env.QUEUE_CATALOG_CONCURRENCY || process.env.QUEUE_EMBEDDING_CONCURRENCY, 10) || 2;
 
 embeddingQueue.process(EMBEDDING_JOB.MESSAGE, messageConcurrency, async (job) => {
   const result = await generateMessageEmbedding(job.data);
@@ -31,16 +29,6 @@ embeddingQueue.process(EMBEDDING_JOB.KNOWLEDGE_BASE, knowledgeConcurrency, async
 
   if (result.status === 'error') {
     throw new Error(result.error || 'knowledge-embedding-failed');
-  }
-
-  return result;
-});
-
-embeddingQueue.process(EMBEDDING_JOB.CATALOG, catalogConcurrency, async (job) => {
-  const result = await generateCatalogEmbedding(job.data);
-
-  if (result.status === 'error') {
-    throw new Error(result.error || 'catalog-embedding-failed');
   }
 
   return result;
@@ -91,6 +79,5 @@ process.on('SIGTERM', shutdown);
 
 logger.info('Embedding worker iniciado', {
   messageConcurrency,
-  knowledgeConcurrency,
-  catalogConcurrency
+  knowledgeConcurrency
 });

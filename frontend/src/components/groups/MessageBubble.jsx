@@ -1,5 +1,4 @@
 import React from 'react';
-import MessageClassificationBubble from '../classification/MessageClassificationBubble';
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -10,10 +9,7 @@ const formatTime = (value) => {
 
 const MessageBubble = ({
   message,
-  conversationIdFallback = null,
   isNewSender = false,
-  initiallyOpenClassification = false,
-  onClassificationInitialOpen = () => {},
   mentionLookup,
   highlighted = false,
   previouslyAudited = false
@@ -26,38 +22,7 @@ const MessageBubble = ({
     createdAt
   } = message;
 
-  const featureEnabled = (import.meta.env.VITE_FEATURE_CLASSIFICATION_BADGE ?? 'true') !== 'false';
-  const tipoMensagemRaw = message.tipo || message.tipo_mensagem || message.type || message.messageType || null;
-  const tipoMensagem = typeof tipoMensagemRaw === 'string' ? tipoMensagemRaw.toLowerCase() : null;
   const hasTexto = typeof texto === 'string' && texto.trim().length > 0;
-  const isTextMessage = tipoMensagem ? ['text', 'texto', 'conversation'].includes(tipoMensagem) : hasTexto;
-  const isClassificavel = featureEnabled && (hasTexto || previouslyAudited || isTextMessage);
-  const resolvedConversationIdRaw = message.conversationId ?? conversationIdFallback ?? null;
-  const resolvedConversationId = React.useMemo(() => {
-    if (typeof resolvedConversationIdRaw === 'number' && Number.isInteger(resolvedConversationIdRaw)) {
-      return resolvedConversationIdRaw;
-    }
-    if (typeof resolvedConversationIdRaw === 'string' && /^\d+$/.test(resolvedConversationIdRaw.trim())) {
-      return Number.parseInt(resolvedConversationIdRaw.trim(), 10);
-    }
-    return null;
-  }, [resolvedConversationIdRaw]);
-  const classificationMessageId = React.useMemo(() => {
-    if (typeof message.id === 'number' && Number.isInteger(message.id)) {
-      return message.id;
-    }
-    if (typeof message.id === 'string' && /^\d+$/.test(message.id.trim())) {
-      return Number.parseInt(message.id.trim(), 10);
-    }
-    if (typeof message.messageId === 'number') {
-      return message.messageId;
-    }
-    if (typeof message.messageId === 'string' && /^\d+$/.test(message.messageId.trim())) {
-      return Number.parseInt(message.messageId.trim(), 10);
-    }
-    return null;
-  }, [message.id, message.messageId]);
-  const canRenderClassification = isClassificavel && classificationMessageId !== null && resolvedConversationId !== null;
   const parsedMetadata = React.useMemo(() => {
     if (!message.metadata) {
       return null;
@@ -242,6 +207,50 @@ const MessageBubble = ({
     return output;
   }, [texto, mentionNames]);
 
+  const renderWithLinks = React.useCallback((value) => {
+    if (typeof value !== 'string' || value.length === 0) {
+      return value;
+    }
+
+    const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
+    const elements = [];
+    let lastIndex = 0;
+
+    for (const match of value.matchAll(urlRegex)) {
+      const url = match[0];
+      const start = match.index ?? 0;
+
+      if (start > lastIndex) {
+        elements.push(value.slice(lastIndex, start));
+      }
+
+      const href = url.startsWith('http') ? url : `https://${url}`;
+      elements.push(
+        <a
+          key={`link-${start}-${url}`}
+          href={href}
+          className="break-all text-wa-link underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {url}
+        </a>
+      );
+
+      lastIndex = start + url.length;
+    }
+
+    if (lastIndex < value.length) {
+      elements.push(value.slice(lastIndex));
+    }
+
+    if (elements.length === 0) {
+      return value;
+    }
+
+    return elements.map((part, index) => (typeof part === 'string' ? <React.Fragment key={`text-${index}`}>{part}</React.Fragment> : part));
+  }, []);
+
   const alignmentClass = isFromMe ? 'justify-end' : 'justify-start';
   const wrapperSpacing = isNewSender ? 'mt-6 mb-3' : 'mt-2 mb-2';
   const bubbleTone = isFromMe
@@ -265,16 +274,6 @@ const MessageBubble = ({
   return (
     <div id={bubbleId} className={`flex ${alignmentClass} ${wrapperSpacing}`}>
       <div className="relative flex max-w-full">
-        {canRenderClassification ? (
-          <MessageClassificationBubble
-            messageId={classificationMessageId}
-            conversaId={resolvedConversationId}
-            anchor="right"
-            initiallyOpen={initiallyOpenClassification}
-            onInitialOpen={onClassificationInitialOpen}
-          />
-        ) : null}
-
         <div
           className={`message-bubble relative rounded-2xl text-[15px] leading-[1.4] text-wa-text-primary transition-colors ${bubbleTone} ${highlightClass} ${auditedClass}`}
           style={bubbleStyle}
@@ -293,7 +292,7 @@ const MessageBubble = ({
 
           {formattedText && (
             <p className="m-0 whitespace-pre-wrap break-words text-wa-text-primary">
-              {formattedText}
+              {renderWithLinks(formattedText)}
             </p>
           )}
 

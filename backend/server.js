@@ -30,10 +30,6 @@ const webhookRoutes = require('./src/api/routes/webhook.routes');
 const conversationRoutes = require('./src/api/routes/conversation.routes');
 const messageRoutes = require('./src/api/routes/message.routes');
 const dashboardRoutes = require('./src/api/routes/dashboard.routes');
-const catalogoRoutes = require('./src/api/routes/catalogo.routes');
-const mensagemClassificacaoRoutes = require('./src/api/routes/mensagemClassificacao.routes');
-const classificacaoAdminRoutes = require('./src/api/routes/classificacao.routes');
-const auditoriaRoutes = require('./src/api/routes/auditoria.routes.ts');
 const agenteRoutes = require('./src/api/routes/agente.routes');
 
 const app = express();
@@ -131,19 +127,11 @@ app.use('/api/conversas', conversationRoutes);
 
 // Messages
 app.use('/api/mensagens', messageRoutes);
-// Mensagens - classificação
-app.use('/api/mensagens', mensagemClassificacaoRoutes);
-app.use('/api/classificacao', mensagemClassificacaoRoutes);
-app.use('/api/classificacoes', classificacaoAdminRoutes);
 
 // Dashboard
 app.use('/api/dashboard', dashboardRoutes);
 
-// Catálogo de classificação
-app.use('/api/catalogo', catalogoRoutes);
-
 // Auditoria
-app.use('/api/auditoria', auditoriaRoutes);
 
 // Agente conversacional
 app.use('/api/agente', agenteRoutes);

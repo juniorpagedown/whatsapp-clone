@@ -119,13 +119,6 @@ async function diagnose() {
       FROM mensagens
       UNION ALL
       SELECT 
-        'classificacao_catalogo',
-        COUNT(*),
-        COUNT(embedding),
-        ROUND(COUNT(embedding)::numeric / NULLIF(COUNT(*), 0)::numeric * 100, 2)
-      FROM classificacao_catalogo
-      UNION ALL
-      SELECT 
         'conversa_contexto',
         COUNT(*),
         COUNT(embedding),

@@ -4,8 +4,7 @@ const logger = require('../../shared/config/logger.config');
 
 const EMBEDDING_JOB = {
   MESSAGE: 'embedding:message',
-  KNOWLEDGE_BASE: 'embedding:knowledge-base',
-  CATALOG: 'embedding:catalog'
+  KNOWLEDGE_BASE: 'embedding:knowledge-base'
 };
 
 const queueName = process.env.EMBEDDING_QUEUE_NAME || 'embedding-jobs';

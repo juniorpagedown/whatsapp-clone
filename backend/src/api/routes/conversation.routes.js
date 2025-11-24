@@ -2,13 +2,12 @@
 const express = require('express');
 const router = express.Router();
 const { asyncHandler } = require('../middlewares/errorHandler.middleware');
-const { authenticateToken, requireRole } = require('../middlewares/auth.middleware');
+const { authenticateToken } = require('../middlewares/auth.middleware');
 const { validate } = require('../middlewares/validation.middleware');
 const {
   listConversations,
   getConversationMessages
 } = require('../controllers/conversation.controller');
-const classificacaoController = require('../controllers/classificacao.controller');
 const conversaContextoController = require('../controllers/conversaContexto.controller');
 const { listContextosSchema } = require('../validators/conversaContexto.validator');
 
@@ -42,42 +41,6 @@ router.get(
   authenticateToken,
   validate(listContextosSchema),
   asyncHandler(conversaContextoController.listConversationContexts)
-);
-
-/**
- * GET /api/conversas/:id/classificacao
- * Retorna última classificação aplicada
- * PROTEGIDO: Requer role auditar/admin
- */
-router.get(
-  '/:id/classificacao',
-  authenticateToken,
-  requireRole('auditar', 'admin'),
-  asyncHandler(classificacaoController.getLatestClassification)
-);
-
-/**
- * GET /api/conversas/:id/sugestoes
- * Retorna top sugestões de classificação baseadas nas últimas mensagens
- * PROTEGIDO: Requer role auditar/admin
- */
-router.get(
-  '/:id/sugestoes',
-  authenticateToken,
-  requireRole('auditar', 'admin'),
-  asyncHandler(classificacaoController.getSuggestions)
-);
-
-/**
- * PUT /api/conversas/:id/classificacao
- * Aplica nova classificação à conversa (salvamento automático)
- * PROTEGIDO: Requer role auditar/admin
- */
-router.put(
-  '/:id/classificacao',
-  authenticateToken,
-  requireRole('auditar', 'admin'),
-  asyncHandler(classificacaoController.applyClassification)
 );
 
 module.exports = router;
