@@ -4,6 +4,22 @@
 -- Habilitar extensão pgvector para embeddings
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Tabela de usuários
+CREATE TABLE IF NOT EXISTS usuarios (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) DEFAULT 'atendente',
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_usuarios_email ON usuarios(email);
+
+
 -- Tabela de contatos
 CREATE TABLE IF NOT EXISTS contatos (
     id SERIAL PRIMARY KEY,
@@ -124,28 +140,6 @@ CREATE INDEX idx_conversa_classificacao_conversa_created
 CREATE INDEX idx_conversa_classificacao_macro_item
     ON conversa_classificacao(macro, item);
 
--- Classificação manual por mensagem
-CREATE TABLE IF NOT EXISTS mensagem_classificacao (
-    id BIGSERIAL PRIMARY KEY,
-    message_id INTEGER NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
-    conversa_id INTEGER NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
-    macro TEXT NOT NULL,
-    item TEXT NOT NULL,
-    comentario TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT mensagem_classificacao_message_unique UNIQUE (message_id)
-);
-
-CREATE INDEX idx_mensagem_classificacao_conversa
-    ON mensagem_classificacao(conversa_id);
-
-CREATE INDEX idx_mensagem_classificacao_user
-    ON mensagem_classificacao(user_id);
-
-CREATE INDEX idx_mensagem_classificacao_macro_item
-    ON mensagem_classificacao(macro, item);
 
 -- Tabela de mensagens (principal)
 CREATE TABLE IF NOT EXISTS mensagens (
@@ -181,6 +175,30 @@ CREATE INDEX idx_mensagens_tipo ON mensagens(tipo_mensagem);
 CREATE INDEX idx_mensagens_texto ON mensagens USING gin(to_tsvector('portuguese', texto));
 CREATE INDEX idx_mensagens_embedding ON mensagens USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX idx_mensagens_embedding_ivfflat ON mensagens USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Classificação manual por mensagem
+CREATE TABLE IF NOT EXISTS mensagem_classificacao (
+    id BIGSERIAL PRIMARY KEY,
+    message_id INTEGER NOT NULL REFERENCES mensagens(id) ON DELETE CASCADE,
+    conversa_id INTEGER NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    macro TEXT NOT NULL,
+    item TEXT NOT NULL,
+    comentario TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT mensagem_classificacao_message_unique UNIQUE (message_id)
+);
+
+CREATE INDEX idx_mensagem_classificacao_conversa
+    ON mensagem_classificacao(conversa_id);
+
+CREATE INDEX idx_mensagem_classificacao_user
+    ON mensagem_classificacao(user_id);
+
+CREATE INDEX idx_mensagem_classificacao_macro_item
+    ON mensagem_classificacao(macro, item);
+
 
 -- Tabela de contexto de conversas
 CREATE TABLE IF NOT EXISTS conversa_contexto (
@@ -302,7 +320,7 @@ CREATE OR REPLACE FUNCTION buscar_mensagens_similares(
 RETURNS TABLE (
     id INTEGER,
     texto TEXT,
-    timestamp TIMESTAMP,
+    data_envio TIMESTAMP,
     conversa_nome TEXT,
     similarity NUMERIC
 ) AS $$
@@ -311,7 +329,7 @@ BEGIN
     SELECT 
         m.id,
         m.texto,
-        m.timestamp,
+        m.timestamp as data_envio,
         CASE 
             WHEN c.tipo = 'individual' THEN cont.nome
             WHEN c.tipo = 'grupo' THEN g.nome

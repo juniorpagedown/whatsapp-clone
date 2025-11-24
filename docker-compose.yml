@@ -1,11 +1,88 @@
+version: '3.8'
+
 services:
+  postgres:
+    image: ankane/pgvector:v0.5.1
+    environment:
+      POSTGRES_DB: whatsapp_clone
+      POSTGRES_USER: whatsapp_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sua_senha_super_segura_aqui}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U whatsapp_user" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
   backend:
     build: ./backend
-    command: npm start
-    env_file: ./backend/.env
-    restart: always
-  embedding-worker:
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: whatsapp_clone
+      DB_USER: whatsapp_user
+      DB_PASSWORD: ${DB_PASSWORD:-sua_senha_super_segura_aqui}
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      ALLOW_SELF_REGISTRATION: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  worker:
     build: ./backend
-    command: npm run worker:embedding
-    env_file: ./backend/.env
-    restart: always
+    command: node src/worker.js
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      API_URL: http://backend:3001
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  redis_data:
