@@ -1,0 +1,315 @@
+// server.js - Backend WhatsApp Clone com PostgreSQL + pgvector
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const { Pool } = require('pg');
+const axios = require('axios');
+require('dotenv').config();
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// Configurações
+const PORT = process.env.PORT || 3001;
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL;
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Pool de conexão PostgreSQL
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'whatsapp_clone',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// Testar conexão
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('❌ Erro ao conectar no PostgreSQL:', err);
+  } else {
+    console.log('✅ PostgreSQL conectado:', res.rows[0].now);
+  }
+});
+
+// Função para gerar embedding
+async function gerarEmbedding(texto) {
+  if (!OPENAI_API_KEY) {
+    console.warn('⚠️  OpenAI API Key não configurada');
+    return null;
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/embeddings',
+      { model: 'text-embedding-ada-002', input: texto },
+      { headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` }}
+    );
+    return response.data.data[0].embedding;
+  } catch (error) {
+    console.error('Erro ao gerar embedding:', error.message);
+    return null;
+  }
+}
+
+async function processarMensagemComIA(mensagemId) {
+  try {
+    const result = await pool.query('SELECT texto FROM mensagens WHERE id = $1', [mensagemId]);
+    if (result.rows.length === 0 || !result.rows[0].texto) return;
+
+    const embedding = await gerarEmbedding(result.rows[0].texto);
+    if (embedding) {
+      await pool.query('UPDATE mensagens SET embedding = $1 WHERE id = $2', 
+        [`[${embedding.join(',')}]`, mensagemId]);
+      console.log(`✅ Embedding gerado para mensagem ${mensagemId}`);
+    }
+  } catch (error) {
+    console.error('Erro ao processar mensagem:', error);
+  }
+}
+
+// ROTAS - Conversas
+app.get('/api/conversas', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.*, 
+        CASE WHEN c.tipo = 'individual' THEN cont.nome WHEN c.tipo = 'grupo' THEN g.nome END as nome,
+        CASE WHEN c.tipo = 'individual' THEN cont.avatar WHEN c.tipo = 'grupo' THEN g.avatar END as avatar,
+        CASE WHEN c.tipo = 'individual' THEN cont.phone ELSE NULL END as phone
+      FROM conversas c
+      LEFT JOIN contatos cont ON c.contato_id = cont.id
+      LEFT JOIN grupos g ON c.grupo_id = g.id
+      WHERE c.is_archived = FALSE
+      ORDER BY c.ultima_mensagem_timestamp DESC NULLS LAST
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mensagens de uma conversa
+app.get('/api/conversas/:conversaId/mensagens', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT m.*, c.nome as remetente_nome, c.phone as remetente_phone
+      FROM mensagens m
+      LEFT JOIN contatos c ON m.contato_id = c.id
+      WHERE m.conversa_id = $1
+      ORDER BY m.timestamp ASC
+      LIMIT 50
+    `, [req.params.conversaId]);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Enviar mensagem
+app.post('/api/mensagens/enviar', async (req, res) => {
+  const { chat_id, texto, phone } = req.body;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    let conversaResult = await client.query('SELECT * FROM conversas WHERE chat_id = $1', [chat_id]);
+    let conversaId;
+
+    if (conversaResult.rows.length === 0) {
+      const novaConversa = await client.query(
+        'INSERT INTO conversas (chat_id, tipo, ultima_mensagem, ultima_mensagem_timestamp) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING id',
+        [chat_id, 'individual', texto]
+      );
+      conversaId = novaConversa.rows[0].id;
+    } else {
+      conversaId = conversaResult.rows[0].id;
+    }
+
+    const evolutionResponse = await axios.post(
+      `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
+      { number: phone, text: texto },
+      { headers: { 'apikey': EVOLUTION_API_KEY }}
+    );
+
+    const mensagemResult = await client.query(
+      'INSERT INTO mensagens (message_id, conversa_id, tipo_mensagem, texto, is_from_me, timestamp, status) VALUES ($1, $2, $3, $4, TRUE, CURRENT_TIMESTAMP, $5) RETURNING *',
+      [evolutionResponse.data.key?.id, conversaId, 'text', texto, 'sent']
+    );
+
+    await client.query('UPDATE conversas SET ultima_mensagem = $1, ultima_mensagem_timestamp = CURRENT_TIMESTAMP WHERE id = $2', [texto, conversaId]);
+    await client.query('COMMIT');
+
+    const mensagem = mensagemResult.rows[0];
+    processarMensagemComIA(mensagem.id).catch(console.error);
+    io.emit('nova_mensagem', mensagem);
+
+    res.json({ success: true, mensagem });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Busca semântica
+app.post('/api/buscar-similar', async (req, res) => {
+  const { query, limit = 10 } = req.body;
+  try {
+    const embedding = await gerarEmbedding(query);
+    if (!embedding) return res.status(400).json({ error: 'Erro ao gerar embedding' });
+
+    const result = await pool.query(
+      'SELECT * FROM buscar_mensagens_similares($1::vector, $2)',
+      [`[${embedding.join(',')}]`, limit]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Estatísticas
+app.get('/api/estatisticas', async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM contatos) as total_contatos,
+        (SELECT COUNT(*) FROM grupos) as total_grupos,
+        (SELECT COUNT(*) FROM conversas) as total_conversas,
+        (SELECT COUNT(*) FROM mensagens) as total_mensagens,
+        (SELECT COUNT(*) FROM mensagens WHERE embedding IS NOT NULL) as mensagens_com_embedding,
+        (SELECT COUNT(*) FROM conhecimento_base WHERE is_active = TRUE) as conhecimentos_ativos
+    `);
+    res.json(stats.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// WEBHOOK Evolution API
+app.post('/webhook/evolution', async (req, res) => {
+  console.log('📨 Webhook recebido:', JSON.stringify(req.body, null, 2));
+  const { event, data } = req.body;
+  const client = await pool.connect();
+
+  try {
+    if (event === 'messages.upsert') {
+      await client.query('BEGIN');
+
+      const message = data.message;
+      const key = data.key;
+      const pushName = data.pushName || 'Desconhecido';
+      const remoteJid = key.remoteJid;
+      const messageText = message?.conversation || message?.extendedTextMessage?.text || '';
+      const isGroup = remoteJid.includes('@g.us');
+      const phone = remoteJid.split('@')[0];
+
+      const contatoResult = await client.query(
+        'INSERT INTO contatos (phone, nome, last_interaction) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (phone) DO UPDATE SET nome = EXCLUDED.nome, last_interaction = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP RETURNING id',
+        [phone, pushName]
+      );
+      const contatoId = contatoResult.rows[0].id;
+
+      let conversaResult = await client.query('SELECT id FROM conversas WHERE chat_id = $1', [remoteJid]);
+      let conversaId;
+
+      if (conversaResult.rows.length === 0) {
+        if (isGroup) {
+          const grupoResult = await client.query(
+            'INSERT INTO grupos (group_id, nome) VALUES ($1, $2) ON CONFLICT (group_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP RETURNING id',
+            [remoteJid, pushName]
+          );
+          conversaResult = await client.query(
+            'INSERT INTO conversas (chat_id, tipo, grupo_id, ultima_mensagem, ultima_mensagem_timestamp) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING id',
+            [remoteJid, 'grupo', grupoResult.rows[0].id, messageText]
+          );
+        } else {
+          conversaResult = await client.query(
+            'INSERT INTO conversas (chat_id, tipo, contato_id, ultima_mensagem, ultima_mensagem_timestamp) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING id',
+            [remoteJid, 'individual', contatoId, messageText]
+          );
+        }
+        conversaId = conversaResult.rows[0].id;
+      } else {
+        conversaId = conversaResult.rows[0].id;
+        await client.query(
+          'UPDATE conversas SET ultima_mensagem = $1, ultima_mensagem_timestamp = CURRENT_TIMESTAMP, unread_count = unread_count + 1 WHERE id = $2',
+          [messageText, conversaId]
+        );
+      }
+
+      const mensagemResult = await client.query(
+        'INSERT INTO mensagens (message_id, conversa_id, contato_id, tipo_mensagem, texto, is_from_me, timestamp, status) VALUES ($1, $2, $3, $4, $5, FALSE, CURRENT_TIMESTAMP, $6) RETURNING *',
+        [key.id, conversaId, contatoId, 'text', messageText, 'received']
+      );
+
+      await client.query('COMMIT');
+
+      const novaMensagem = mensagemResult.rows[0];
+      processarMensagemComIA(novaMensagem.id).catch(console.error);
+      io.emit('nova_mensagem', novaMensagem);
+      io.emit('conversa_atualizada', { conversaId, ultimaMensagem: messageText });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Erro no webhook:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Health check
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), database: 'connected' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', database: 'disconnected', error: error.message });
+  }
+});
+
+// WebSocket
+io.on('connection', (socket) => {
+  console.log('✅ Cliente conectado:', socket.id);
+  socket.on('disconnect', () => console.log('❌ Cliente desconectado:', socket.id));
+  socket.on('entrar_conversa', (conversaId) => socket.join(`conversa_${conversaId}`));
+});
+
+// Iniciar servidor
+server.listen(PORT, () => {
+  console.log(`
+╔════════════════════════════════════════════════════════╗
+║     🚀 WhatsApp Clone + IA - Servidor Online          ║
+║                                                        ║
+║  Porta: ${PORT}                                         ║
+║  Database: PostgreSQL + pgvector                       ║
+║  IA: ${OPENAI_API_KEY ? 'OpenAI ✅' : 'Desabilitada ⚠️'}              ║
+╚════════════════════════════════════════════════════════╝
+  `);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Encerrando...');
+  await pool.end();
+  server.close();
+  process.exit(0);
+});

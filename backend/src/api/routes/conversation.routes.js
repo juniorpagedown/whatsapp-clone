@@ -1,0 +1,83 @@
+// api/routes/conversation.routes.js
+const express = require('express');
+const router = express.Router();
+const { asyncHandler } = require('../middlewares/errorHandler.middleware');
+const { authenticateToken, requireRole } = require('../middlewares/auth.middleware');
+const { validate } = require('../middlewares/validation.middleware');
+const {
+  listConversations,
+  getConversationMessages
+} = require('../controllers/conversation.controller');
+const classificacaoController = require('../controllers/classificacao.controller');
+const conversaContextoController = require('../controllers/conversaContexto.controller');
+const { listContextosSchema } = require('../validators/conversaContexto.validator');
+
+/**
+ * GET /api/conversas
+ * Lista conversas com informações resumidas
+ * PROTEGIDO: Requer autenticação
+ */
+router.get('/', authenticateToken, asyncHandler(listConversations));
+
+router.get(
+  '/contextos/disponiveis',
+  authenticateToken,
+  asyncHandler(conversaContextoController.listConversationsWithSummary)
+);
+
+/**
+ * GET /api/conversas/:id/mensagens
+ * Lista mensagens de uma conversa específica
+ * PROTEGIDO: Requer autenticação
+ */
+router.get('/:id/mensagens', authenticateToken, asyncHandler(getConversationMessages));
+
+/**
+ * GET /api/conversas/:conversaId/contextos
+ * Lista contextos resumidos de uma conversa
+ * PROTEGIDO: Requer autenticação
+ */
+router.get(
+  '/:conversaId/contextos',
+  authenticateToken,
+  validate(listContextosSchema),
+  asyncHandler(conversaContextoController.listConversationContexts)
+);
+
+/**
+ * GET /api/conversas/:id/classificacao
+ * Retorna última classificação aplicada
+ * PROTEGIDO: Requer role auditar/admin
+ */
+router.get(
+  '/:id/classificacao',
+  authenticateToken,
+  requireRole('auditar', 'admin'),
+  asyncHandler(classificacaoController.getLatestClassification)
+);
+
+/**
+ * GET /api/conversas/:id/sugestoes
+ * Retorna top sugestões de classificação baseadas nas últimas mensagens
+ * PROTEGIDO: Requer role auditar/admin
+ */
+router.get(
+  '/:id/sugestoes',
+  authenticateToken,
+  requireRole('auditar', 'admin'),
+  asyncHandler(classificacaoController.getSuggestions)
+);
+
+/**
+ * PUT /api/conversas/:id/classificacao
+ * Aplica nova classificação à conversa (salvamento automático)
+ * PROTEGIDO: Requer role auditar/admin
+ */
+router.put(
+  '/:id/classificacao',
+  authenticateToken,
+  requireRole('auditar', 'admin'),
+  asyncHandler(classificacaoController.applyClassification)
+);
+
+module.exports = router;

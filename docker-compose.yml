@@ -1,0 +1,11 @@
+services:
+  backend:
+    build: ./backend
+    command: npm start
+    env_file: ./backend/.env
+    restart: always
+  embedding-worker:
+    build: ./backend
+    command: npm run worker:embedding
+    env_file: ./backend/.env
+    restart: always
