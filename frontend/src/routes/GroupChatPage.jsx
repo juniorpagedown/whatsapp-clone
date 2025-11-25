@@ -75,7 +75,7 @@ const GroupChatPage = () => {
 
   useEffect(() => {
     if (!decodedChatId) {
-      navigate('/groups', { replace: true });
+      navigate('/conversas', { replace: true });
     }
   }, [decodedChatId, navigate]);
 

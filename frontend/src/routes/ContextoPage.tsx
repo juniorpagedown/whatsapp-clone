@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import HistoricoResumido from '../components/conversas/HistoricoResumido';
 import Header from '../components/Header.jsx';
 import { fetchConversationsWithContext, type ConversaComContexto } from '../services/conversaContextoApi';
+import { getConversationUrl } from '../utils/routes';
 
 type ConversationSearchIndex = {
   item: ConversaComContexto;
@@ -264,7 +265,8 @@ const ContextoPage: React.FC = () => {
 
     const suffix = params.toString();
     const query = suffix ? `?${suffix}` : '';
-    navigate(`/groups/${encodeURIComponent(selectedConversation.chat_id)}${query}`);
+    const conversationUrl = getConversationUrl(selectedConversation.chat_id, selectedConversation.tipo);
+    navigate(`${conversationUrl}${query}`);
   };
 
   const selectValue = isSelectedVisible && selectedParam ? selectedParam : '';

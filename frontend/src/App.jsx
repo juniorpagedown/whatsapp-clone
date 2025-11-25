@@ -21,10 +21,12 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          <Route path="/" element={<Navigate to="/groups" replace />} />
+          {/* Redireciona para conversas */}
+          <Route path="/" element={<Navigate to="/conversas" replace />} />
 
+          {/* Rota principal: conversas (grupos + chats individuais) */}
           <Route
-            path="/groups"
+            path="/conversas"
             element={
               <ProtectedRoute>
                 <GroupsPage />
@@ -35,12 +37,19 @@ const App = () => (
               index
               element={(
                 <div className="flex h-full items-center justify-center text-wa-text-secondary">
-                  Selecione um grupo para visualizar as mensagens
+                  Selecione uma conversa para visualizar as mensagens
                 </div>
               )}
             />
-            <Route path=":chatId" element={<GroupChatPage />} />
+            {/* Rota para chats individuais */}
+            <Route path="chat/:chatId" element={<GroupChatPage />} />
+            {/* Rota para grupos */}
+            <Route path="grupo/:chatId" element={<GroupChatPage />} />
           </Route>
+
+          {/* Mantém /groups para compatibilidade (redireciona para /conversas) */}
+          <Route path="/groups" element={<Navigate to="/conversas" replace />} />
+          <Route path="/groups/:chatId" element={<Navigate to="/conversas/chat/:chatId" replace />} />
 
           <Route
             path="/dashboard"
@@ -59,7 +68,8 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/groups" replace />} />
+
+          <Route path="*" element={<Navigate to="/conversas" replace />} />
         </Routes>
       </InstanceProvider>
     </AuthProvider>

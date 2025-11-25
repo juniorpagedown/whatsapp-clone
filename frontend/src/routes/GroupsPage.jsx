@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import GroupList from '../components/groups/GroupList.jsx';
 import { useGroups } from '../hooks/useGroups.js';
 import { getApiBaseUrl } from '../utils/api';
+import { getConversationUrl, CONVERSAS_URL } from '../utils/routes';
 
 const resolveWsUrl = () => {
   const envUrl = import.meta.env?.VITE_WS_URL?.trim();
@@ -131,15 +132,15 @@ const GroupsPage = () => {
     }
 
     if (firstAvailable) {
-      navigate(`/groups/${encodeURIComponent(firstAvailable.chatId)}`, { replace: true });
+      navigate(getConversationUrl(firstAvailable.chatId, firstAvailable.tipo), { replace: true });
     } else {
-      navigate('/groups', { replace: true });
+      navigate(CONVERSAS_URL, { replace: true });
     }
   }, [activeChatId, groups, loading, navigate]);
 
   const handleSelectGroup = (group) => {
     if (!group?.chatId) return;
-    navigate(`/groups/${encodeURIComponent(group.chatId)}`);
+    navigate(getConversationUrl(group.chatId, group.tipo));
   };
 
   const contextValue = useMemo(() => {

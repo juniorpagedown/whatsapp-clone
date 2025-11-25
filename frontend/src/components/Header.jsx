@@ -40,8 +40,8 @@ const Header = () => {
       <nav className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => navigate('/groups')}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive('/groups')
+          onClick={() => navigate('/conversas')}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive('/conversas')
               ? 'bg-wa-bubble-in text-wa-text-primary'
               : 'text-wa-text-secondary hover:bg-wa-panel hover:text-wa-text-primary'
             }`}

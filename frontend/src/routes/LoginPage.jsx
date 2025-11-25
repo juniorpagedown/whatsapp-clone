@@ -13,7 +13,7 @@ const LoginPage = () => {
 
   // Se já está autenticado, redireciona
   if (isAuthenticated) {
-    return <Navigate to="/groups" replace />;
+    return <Navigate to="/conversas" replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -24,7 +24,7 @@ const LoginPage = () => {
     const result = await login(email, password);
 
     if (result.success) {
-      navigate('/groups');
+      navigate('/conversas');
     } else {
       setError(result.error);
     }
