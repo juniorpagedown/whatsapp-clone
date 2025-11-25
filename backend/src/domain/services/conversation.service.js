@@ -2,6 +2,8 @@
 const pool = require('../../infrastructure/database/postgres');
 const cacheService = require('../../infrastructure/cache/cache.service');
 const { AppError } = require('../../shared/errors/AppError');
+const contactSync = require('./contactSync.service');
+const logger = require('../../shared/config/logger.config');
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
@@ -214,6 +216,77 @@ const buildConversationQuery = ({
   return { query, values };
 };
 
+/**
+ * Enriquece um contato individual buscando dados da Evolution API
+ * quando o nome for igual ao telefone (indicando que não temos o nome real)
+ */
+const enrichContactFromEvolution = async (contato, instanceKey) => {
+  if (!contato || !instanceKey) return contato;
+
+  // Se o nome já é diferente do telefone, não precisa buscar
+  if (contato.nome && contato.nome !== contato.phone) {
+    return contato;
+  }
+
+  // Verificar se o contato foi atualizado recentemente (últimas 24 horas)
+  // Se sim, não sobrescrever (pode ser uma atualização manual)
+  if (contato.updated_at) {
+    const updatedAt = new Date(contato.updated_at);
+    const now = new Date();
+    const hoursSinceUpdate = (now - updatedAt) / (1000 * 60 * 60);
+
+    if (hoursSinceUpdate < 24) {
+      logger.debug('Contato atualizado recentemente, pulando enriquecimento', {
+        phone: contato.phone,
+        hoursSinceUpdate: hoursSinceUpdate.toFixed(2)
+      });
+      return contato;
+    }
+  }
+
+  try {
+    const evolutionContact = await contactSync.fetchEvolutionContact(contato.phone, instanceKey);
+
+    if (evolutionContact && evolutionContact.name && evolutionContact.name !== contato.phone) {
+      // Atualizar o contato no banco de dados
+      await pool.query(
+        `UPDATE contatos
+         SET nome = $1,
+             profile_pic_url = COALESCE($2, profile_pic_url),
+             metadata = COALESCE($3::jsonb, metadata),
+             updated_at = NOW()
+         WHERE phone = $4`,
+        [
+          evolutionContact.name,
+          evolutionContact.avatar,
+          JSON.stringify({ evolution: evolutionContact.raw }),
+          contato.phone
+        ]
+      );
+
+      logger.info('Contato enriquecido com dados da Evolution API', {
+        phone: contato.phone,
+        oldName: contato.nome,
+        newName: evolutionContact.name
+      });
+
+      // Retornar contato atualizado
+      return {
+        ...contato,
+        nome: evolutionContact.name,
+        profile_pic_url: evolutionContact.avatar || contato.profile_pic_url
+      };
+    }
+  } catch (error) {
+    logger.debug('Não foi possível enriquecer contato da Evolution API', {
+      phone: contato.phone,
+      error: error.message
+    });
+  }
+
+  return contato;
+};
+
 const listConversations = async ({ search, tipo, limit, offset, instanceId }) => {
   const safeLimit = sanitizeLimit(limit);
   const safeOffset = sanitizeOffset(offset);
@@ -248,6 +321,20 @@ const listConversations = async ({ search, tipo, limit, offset, instanceId }) =>
       ? Number(rows[0].total_count)
       : 0;
 
+    // Buscar instanceKey se instanceId estiver disponível
+    let instanceKey = null;
+    if (instanceId) {
+      try {
+        const instanceResult = await pool.query(
+          'SELECT instance_key FROM whatsapp_instances WHERE id = $1',
+          [instanceId]
+        );
+        instanceKey = instanceResult.rows[0]?.instance_key;
+      } catch (error) {
+        logger.debug('Não foi possível buscar instanceKey', { instanceId, error: error.message });
+      }
+    }
+
     const result = {
       total,
       limit: safeLimit,
@@ -274,6 +361,26 @@ const listConversations = async ({ search, tipo, limit, offset, instanceId }) =>
     };
 
     await cacheService.set(cacheKey, result);
+
+    // Enriquecer contatos individuais em background (não bloqueia a resposta)
+    if (instanceKey) {
+      setImmediate(async () => {
+        for (const conversation of result.conversations) {
+          if (conversation.tipo === 'individual' && conversation.contato) {
+            try {
+              await enrichContactFromEvolution(conversation.contato, instanceKey);
+              // Invalidar cache após enriquecer para que a próxima requisição pegue os dados atualizados
+              await cacheService.delete(cacheKey);
+            } catch (error) {
+              logger.debug('Erro ao enriquecer contato em background', {
+                phone: conversation.contato.phone,
+                error: error.message
+              });
+            }
+          }
+        }
+      });
+    }
 
     return result;
   } catch (error) {

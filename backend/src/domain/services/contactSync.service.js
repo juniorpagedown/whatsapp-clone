@@ -73,55 +73,45 @@ const fetchEvolutionContact = async (phone, instanceKey) => {
 
     if (contactCache.has(cacheKey)) return contactCache.get(cacheKey);
 
-    const candidateEndpoints = [
-        `/contacts/findContact/${instanceKey}/${normalized}`,
-        `/contacts/getContact/${instanceKey}/${normalized}`,
-        `/contacts/getStatus/${instanceKey}/${normalized}`
-    ];
+    try {
+        const remoteJid = `${normalized}@s.whatsapp.net`;
+        const response = await evolutionHttp.post(
+            `/chat/findContacts/${instanceKey}`,
+            {
+                where: { remoteJid }
+            }
+        );
 
-    for (const endpoint of candidateEndpoints) {
-        try {
-            const response = await evolutionHttp.get(endpoint);
-            const payload = response?.data || null;
-            if (!payload) continue;
-
-            const source = payload?.contact || payload?.data || payload?.result || payload;
-            if (!source) continue;
-
-            const name = pickContactName(source);
-            const avatar = pickContactAvatar(source);
-            const waid = pickFirstString(
-                source?.id,
-                source?.wid,
-                source?.jid,
-                source?.user,
-                source?.contactId,
-                source?.waid
-            );
-
-            const resolved = {
-                phone: normalizePhoneDigits(waid) || normalized,
-                name: name || null,
-                avatar: avatar || null,
-                raw: source
-            };
-
-            contactCache.set(cacheKey, resolved);
-            return resolved;
-        } catch (error) {
-            const status = error?.response?.status;
-            const logLevel = status && status < 500 ? 'debug' : 'warn';
-            logger[logLevel]('Evolution contact lookup falhou', {
-                endpoint,
-                phone: normalized,
-                status,
-                message: error.message
-            });
+        const contacts = response?.data;
+        if (!Array.isArray(contacts) || contacts.length === 0) {
+            contactCache.set(cacheKey, null);
+            return null;
         }
-    }
 
-    contactCache.set(cacheKey, null);
-    return null;
+        const contact = contacts[0];
+        const name = pickContactName(contact);
+        const avatar = pickContactAvatar(contact);
+
+        const resolved = {
+            phone: normalized,
+            name: name || null,
+            avatar: avatar || null,
+            raw: contact
+        };
+
+        contactCache.set(cacheKey, resolved);
+        return resolved;
+    } catch (error) {
+        const status = error?.response?.status;
+        const logLevel = status && status < 500 ? 'debug' : 'warn';
+        logger[logLevel]('Evolution contact lookup falhou', {
+            phone: normalized,
+            status,
+            message: error.message
+        });
+        contactCache.set(cacheKey, null);
+        return null;
+    }
 };
 
 const ensureContact = async (client, { phone, nome, profilePicUrl, metadata, forceSync = false, instanceId, instanceKey }) => {
