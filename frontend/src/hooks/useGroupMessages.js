@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { chatService } from '../services/chat.service';
-import { buildApiUrl } from '../utils/api';
+
 const PAGE_SIZE = 50;
 
 const normalizeMessage = (message) => {
@@ -12,6 +12,16 @@ const normalizeMessage = (message) => {
 
   const id = message.id || message.messageId || message.message_id || message.internalId || message.tempId;
 
+  const texto = message.texto || message.text || '';
+  const mediaUrl = message.mediaUrl || message.media_url || null;
+  const caption = message.caption || null;
+
+  // Filtrar mensagens sem conteúdo útil (nem texto, nem mídia, nem caption)
+  // Mensagens temporárias (status: 'sending') são permitidas
+  if (!texto && !mediaUrl && !caption && message.status !== 'sending') {
+    return null;
+  }
+
   return {
     id,
     clientId: message.clientId || message.tempId || null,
@@ -21,11 +31,11 @@ const normalizeMessage = (message) => {
     from: message.from || (message.isFromMe ? 'me' : message.senderPhone || message.senderName),
     senderName: message.senderName || (message.isFromMe ? 'Você' : message.senderPhone || 'Participante'),
     senderPhone: message.senderPhone || null,
-    texto: message.texto || message.text || '',
+    texto,
     tipo: message.tipo || message.tipo_mensagem || 'text',
-    mediaUrl: message.mediaUrl || message.media_url || null,
+    mediaUrl,
     mediaMimeType: message.mediaMimeType || message.media_mime_type || null,
-    caption: message.caption || null,
+    caption,
     isFromMe: Boolean(message.isFromMe ?? message.is_from_me),
     isForwarded: Boolean(message.isForwarded ?? message.is_forwarded),
     status: message.status || null,
@@ -57,9 +67,25 @@ export const useGroupMessages = (chatId) => {
       const map = new Map();
       next.forEach((msg) => {
         if (!msg) return;
-        const key = msg.id || msg.clientId;
-        if (!key) return;
-        map.set(key, { ...map.get(key), ...msg });
+
+        // Usar múltiplas chaves para deduplicação mais robusta
+        const primaryKey = msg.id || msg.clientId;
+        if (!primaryKey) return;
+
+        // Se já existe uma mensagem com este ID, não adicionar novamente
+        if (!map.has(primaryKey)) {
+          map.set(primaryKey, msg);
+        }
+
+        // Também verificar por messageId (para mensagens do WhatsApp)
+        if (msg.messageId) {
+          const existingByMessageId = Array.from(map.values()).find(
+            m => m.messageId === msg.messageId
+          );
+          if (!existingByMessageId) {
+            map.set(primaryKey, msg);
+          }
+        }
       });
       return sortMessages(Array.from(map.values()));
     });
@@ -145,17 +171,38 @@ export const useGroupMessages = (chatId) => {
       return;
     }
     setMessagesSafe((prev) => {
-      const existingIndex = prev.findIndex(
-        (msg) =>
-          msg.id === normalized.id ||
-          (normalized.clientId && msg.clientId === normalized.clientId) ||
-          (normalized.messageId && msg.messageId === normalized.messageId)
-      );
+      // Verificar se a mensagem já existe por múltiplos critérios
+      const existingIndex = prev.findIndex((msg) => {
+        // 1. Mesmo ID
+        if (normalized.id && msg.id === normalized.id) return true;
+
+        // 2. Mesmo clientId
+        if (normalized.clientId && msg.clientId === normalized.clientId) return true;
+
+        // 3. Mesmo messageId do WhatsApp
+        if (normalized.messageId && msg.messageId === normalized.messageId) return true;
+
+        // 4. Mesma mensagem por conteúdo (timestamp + texto + sender)
+        // Isso previne duplicatas quando a mesma mensagem vem via WebSocket e API
+        if (
+          msg.texto === normalized.texto &&
+          msg.isFromMe === normalized.isFromMe &&
+          Math.abs(new Date(msg.createdAt).getTime() - new Date(normalized.createdAt).getTime()) < 1000
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+
       if (existingIndex !== -1) {
+        // Atualizar mensagem existente
         const updated = [...prev];
         updated[existingIndex] = { ...updated[existingIndex], ...normalized };
         return updated;
       }
+
+      // Adicionar nova mensagem
       return [...prev, normalized];
     });
   }, [setMessagesSafe]);

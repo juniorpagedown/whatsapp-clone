@@ -300,6 +300,11 @@ const listMessagesByChatId = async ({ chatId, limit, before }) => {
     LEFT JOIN contatos contact ON m.contato_id = contact.id
     WHERE conv.chat_id = $1
       ${beforeClause}
+      AND (
+        m.texto IS NOT NULL AND m.texto != ''
+        OR m.media_url IS NOT NULL
+        OR m.caption IS NOT NULL
+      )
     ORDER BY m.timestamp DESC, m.id DESC
     LIMIT $${params.length}
   `;
