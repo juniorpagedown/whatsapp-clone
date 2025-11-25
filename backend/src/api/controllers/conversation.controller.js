@@ -10,7 +10,8 @@ const listConversations = async (req, res, next) => {
       search,
       tipo,
       limit,
-      offset
+      offset,
+      instanceId: req.instance.id
     });
 
     res.status(200).json({

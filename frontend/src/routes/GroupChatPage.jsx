@@ -4,6 +4,7 @@ import React, {
   useMemo,
   useState
 } from 'react';
+import { chatService } from '../services/chat.service';
 import {
   useNavigate,
   useOutletContext,
@@ -78,7 +79,7 @@ const GroupChatPage = () => {
     }
   }, [decodedChatId, navigate]);
 
-  useEffect(() => {}, []);
+  useEffect(() => { }, []);
 
   useEffect(() => {
     setAuditSuccess(null);
@@ -148,25 +149,13 @@ const GroupChatPage = () => {
     appendMessage(optimisticMessage);
     try {
       setSendingError(null);
-      const token = localStorage.getItem('token');
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
 
-      const response = await fetch(buildApiUrl('/api/mensagens/send'), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ chatId: decodedChatId, texto: text })
+      const data = await chatService.sendMessage({
+        chatId: decodedChatId,
+        texto: text
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro ao enviar mensagem (${response.status})`);
-      }
-
-      const payload = await response.json();
+      const payload = data;
       const message = payload?.data || payload?.mensagem;
       if (message) {
         replaceMessage(clientId, { ...message, status: 'sent' });
@@ -195,9 +184,9 @@ const GroupChatPage = () => {
     }
   }, [sendingError]);
 
-  const handleRefreshAudit = useCallback(() => {}, []);
+  const handleRefreshAudit = useCallback(() => { }, []);
 
-  const handleFinalizeAudit = useCallback(async () => {}, []);
+  const handleFinalizeAudit = useCallback(async () => { }, []);
 
   const userCanAudit = false;
   const pendingMessages = 0;

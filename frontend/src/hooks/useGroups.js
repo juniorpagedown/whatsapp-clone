@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { chatService } from '../services/chat.service';
 import { buildApiUrl } from '../utils/api';
 
 const GROUP_FETCH_LIMIT = 500;
@@ -137,8 +138,8 @@ const normalizeGroup = (group) => {
 
   const participants = Array.isArray(group.participants)
     ? group.participants
-        .map((participant) => participant?.contato?.nome)
-        .filter((name) => typeof name === 'string' && name.trim().length > 0)
+      .map((participant) => participant?.contato?.nome)
+      .filter((name) => typeof name === 'string' && name.trim().length > 0)
     : [];
 
   const parts = rawName.split(' - ');
@@ -227,29 +228,19 @@ export const useGroups = () => {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const token = localStorage.getItem('token');
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const data = await chatService.listConversations({
+        tipo: 'all',
+        limit: GROUP_FETCH_LIMIT
+      }, controller.signal);
 
-      const response = await fetch(buildApiUrl(`/api/conversas?tipo=all&limit=${GROUP_FETCH_LIMIT}`), {
-        signal: controller.signal,
-        headers
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao carregar grupos: ${response.status}`);
-      }
-
-      const payload = await response.json();
+      const payload = data;
       const source = Array.isArray(payload?.data)
         ? payload.data
         : Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.conversations)
-        ? payload.conversations
-        : [];
+          ? payload
+          : Array.isArray(payload?.conversations)
+            ? payload.conversations
+            : [];
 
       const normalized = source
         .map((group) => normalizeGroup(group))

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import { authService } from '../services/auth.service';
 
 const AuthContext = createContext(null);
 
@@ -14,60 +14,37 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('token'));
 
-  // Configurar axios com token
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }, [token]);
-
-  // Verificar token ao carregar
-  useEffect(() => {
-    const checkAuth = async () => {
-      const savedToken = localStorage.getItem('token');
-
-      if (!savedToken) {
-        setLoading(false);
-        return;
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        authService.setAuthToken(token);
+        try {
+          const userData = await authService.getMe();
+          setUser(userData);
+        } catch (error) {
+          console.error('Erro ao validar token:', error);
+          localStorage.removeItem('token');
+          authService.setAuthToken(null);
+        }
       }
-
-      try {
-        const response = await axios.get('/api/auth/me');
-        setUser(response.data.data.user);
-        setToken(savedToken);
-      } catch (error) {
-        console.error('Erro ao verificar autenticação:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        setToken(null);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     };
 
-    checkAuth();
+    initAuth();
   }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/auth/login', {
-        email,
-        password
-      });
-
-      const { user, accessToken, refreshToken } = response.data.data;
+      const response = await authService.login(email, password);
+      // Backend returns { success: true, data: { user, accessToken, refreshToken } }
+      const { user, accessToken } = response.data;
 
       localStorage.setItem('token', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-
-      setToken(accessToken);
+      authService.setAuthToken(accessToken);
       setUser(user);
-
-      return { success: true };
+      return { success: true, user };
     } catch (error) {
       console.error('Erro no login:', error);
       return {
@@ -79,30 +56,25 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post('/api/auth/logout');
+      await authService.logout();
     } catch (error) {
-      console.error('Erro no logout:', error);
+      console.error('Erro ao fazer logout:', error);
     } finally {
       localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      setToken(null);
+      authService.setAuthToken(null);
       setUser(null);
     }
   };
 
   const register = async (userData) => {
     try {
-      const response = await axios.post('/api/auth/register', userData);
-
-      const { user, accessToken, refreshToken } = response.data.data;
+      const response = await authService.register(userData);
+      const { user, accessToken } = response.data;
 
       localStorage.setItem('token', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-
-      setToken(accessToken);
+      authService.setAuthToken(accessToken);
       setUser(user);
-
-      return { success: true };
+      return { success: true, user };
     } catch (error) {
       console.error('Erro no registro:', error);
       return {
@@ -114,7 +86,6 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
-    token,
     loading,
     login,
     logout,

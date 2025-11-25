@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { dashboardService } from './services/dashboard.service';
 import { TrendingUp, MessageSquare, Users, Brain } from 'lucide-react';
 
 const DashboardAnalytics = () => {
@@ -15,8 +15,8 @@ const DashboardAnalytics = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get('/api/dashboard/stats');
-      setStats(response.data?.data || {});
+      const data = await dashboardService.getStats();
+      setStats(data?.data || {});
     } catch (err) {
       console.error('Erro ao carregar dados do dashboard:', err);
       setError('Não foi possível carregar as métricas. Tente novamente.');

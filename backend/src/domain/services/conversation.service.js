@@ -22,9 +22,15 @@ const sanitizeOffset = (value) => {
   return parsed;
 };
 
-const buildFilters = ({ search, tipo }) => {
+const buildFilters = ({ search, tipo, instanceId }) => {
   const filters = [];
   const values = [];
+
+  // Filter by Instance ID (Mandatory)
+  if (instanceId) {
+    values.push(instanceId);
+    filters.push(`c.instance_id = $${values.length}`);
+  }
 
   if (search) {
     values.push(`%${search}%`);
@@ -147,9 +153,9 @@ const buildConversationQuery = ({
           )
         ) ORDER BY gp.joined_at ASC) AS participants
         FROM grupo_participantes gp
-      LEFT JOIN contatos ct ON ct.id = gp.contato_id
-      WHERE gp.grupo_id = c.grupo_id
-    ) participants_data ON true
+        LEFT JOIN contatos ct ON ct.id = gp.contato_id
+        WHERE gp.grupo_id = c.grupo_id
+      ) participants_data ON true
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*) AS total_mensagens,
@@ -208,14 +214,15 @@ const buildConversationQuery = ({
   return { query, values };
 };
 
-const listConversations = async ({ search, tipo, limit, offset }) => {
+const listConversations = async ({ search, tipo, limit, offset, instanceId }) => {
   const safeLimit = sanitizeLimit(limit);
   const safeOffset = sanitizeOffset(offset);
   const cacheKey = cacheService.generateKey('conversas:list:recent', {
     search: search || null,
     tipo: tipo || null,
     limit: safeLimit,
-    offset: safeOffset
+    offset: safeOffset,
+    instanceId // Include instanceId in cache key
   });
 
   const cachedResult = await cacheService.get(cacheKey);
@@ -223,7 +230,7 @@ const listConversations = async ({ search, tipo, limit, offset }) => {
     return cachedResult;
   }
 
-  const { whereClause, values } = buildFilters({ search, tipo });
+  const { whereClause, values } = buildFilters({ search, tipo, instanceId });
   try {
     const { query, values: queryValues } = buildConversationQuery({
       whereClause,

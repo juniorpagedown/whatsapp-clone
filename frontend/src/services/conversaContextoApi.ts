@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { buildApiUrl } from '../utils/api';
 
 export type ConversaContextoItem = {
@@ -97,55 +98,41 @@ export const fetchConversationContexts = async ({
   q,
   signal
 }: FetchContextsParams): Promise<ConversaContextoResponse> => {
-  const params = new URLSearchParams();
-  if (typeof limit === 'number') params.set('limit', String(limit));
-  if (typeof offset === 'number') params.set('offset', String(offset));
-  if (sort) params.set('sort', sort);
-  if (from) params.set('from', from);
-  if (to) params.set('to', to);
-  if (q) params.set('q', q);
+  const params: Record<string, string> = {};
+  if (typeof limit === 'number') params.limit = String(limit);
+  if (typeof offset === 'number') params.offset = String(offset);
+  if (sort) params.sort = sort;
+  if (from) params.from = from;
+  if (to) params.to = to;
+  if (q) params.q = q;
 
-  const token = localStorage.getItem('token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(
-    buildApiUrl(`/api/conversas/${conversaId}/contextos?${params.toString()}`),
-    {
-      method: 'GET',
-      headers,
+  try {
+    const response = await axios.get(buildApiUrl(`/api/conversas/${conversaId}/contextos`), {
+      params,
       signal
-    }
-  );
+    });
 
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => null);
-    const message = errorPayload?.error?.message || `Erro ao carregar contextos (${response.status})`;
-    const error = new Error(message) as Error & { code?: string };
-    if (errorPayload?.error?.code) {
-      error.code = errorPayload.error.code;
+    const payload = response.data;
+    const itemsRaw = Array.isArray(payload?.data) ? payload.data : [];
+
+    return {
+      data: itemsRaw.map(normalizeItem),
+      meta: {
+        limit: Number(payload?.meta?.limit ?? limit ?? 0),
+        offset: Number(payload?.meta?.offset ?? offset ?? 0),
+        count: Number(payload?.meta?.count ?? itemsRaw.length ?? 0),
+        has_more: Boolean(payload?.meta?.has_more),
+        sort: payload?.meta?.sort
+      }
+    };
+  } catch (error: any) {
+    const message = error.response?.data?.error?.message || error.message || 'Erro ao carregar contextos';
+    const newError = new Error(message) as Error & { code?: string };
+    if (error.response?.data?.error?.code) {
+      newError.code = error.response.data.error.code;
     }
-    throw error;
+    throw newError;
   }
-
-  const payload = await response.json();
-  const itemsRaw = Array.isArray(payload?.data) ? payload.data : [];
-
-  return {
-    data: itemsRaw.map(normalizeItem),
-    meta: {
-      limit: Number(payload?.meta?.limit ?? limit ?? 0),
-      offset: Number(payload?.meta?.offset ?? offset ?? 0),
-      count: Number(payload?.meta?.count ?? itemsRaw.length ?? 0),
-      has_more: Boolean(payload?.meta?.has_more),
-      sort: payload?.meta?.sort
-    }
-  };
 };
 
 export const fetchConversationsWithContext = async (): Promise<ConversaComContexto[]> => {

@@ -18,6 +18,7 @@ const logger = require('./src/shared/config/logger.config');
 const corsOptions = require('./src/shared/config/cors.config');
 const { globalLimiter } = require('./src/api/middlewares/rateLimit.middleware');
 const { errorHandler, notFound } = require('./src/api/middlewares/errorHandler.middleware');
+const { instanceMiddleware } = require('./src/api/middlewares/instance.middleware');
 const socketManager = require('./src/infrastructure/websocket/socketManager');
 const { startEmbeddingScheduler } = require('./src/infrastructure/scheduler/embedding.scheduler');
 const { startConversationContextScheduler } = require('./src/infrastructure/scheduler/conversa-contexto.scheduler');
@@ -31,6 +32,7 @@ const conversationRoutes = require('./src/api/routes/conversation.routes');
 const messageRoutes = require('./src/api/routes/message.routes');
 const dashboardRoutes = require('./src/api/routes/dashboard.routes');
 const agenteRoutes = require('./src/api/routes/agente.routes');
+const instanceRoutes = require('./src/api/routes/instance.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -117,24 +119,32 @@ app.use(globalLimiter);
 app.use('/', healthRoutes);
 
 // Auth routes
+// Auth routes
 app.use('/api/auth', authRoutes);
+
+// Instance routes
+app.use('/api/instances', instanceRoutes);
 
 // Webhooks
 app.use(['/webhooks', '/webhook'], webhookRoutes);
 
 // Conversations
-app.use('/api/conversas', conversationRoutes);
+// Conversations
+app.use('/api/conversas', instanceMiddleware, conversationRoutes);
 
 // Messages
-app.use('/api/mensagens', messageRoutes);
+// Messages
+app.use('/api/mensagens', instanceMiddleware, messageRoutes);
 
 // Dashboard
-app.use('/api/dashboard', dashboardRoutes);
+// Dashboard
+app.use('/api/dashboard', instanceMiddleware, dashboardRoutes);
 
 // Auditoria
 
 // Agente conversacional
-app.use('/api/agente', agenteRoutes);
+// Agente conversacional
+app.use('/api/agente', instanceMiddleware, agenteRoutes);
 
 // ============================================
 // ERROR HANDLING

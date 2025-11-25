@@ -9,6 +9,7 @@ const { handleEvolutionWebhook } = require('../controllers/webhook.controller');
  * Recebe eventos da Evolution API e persiste mensagens/conversas
  */
 router.post('/', asyncHandler(handleEvolutionWebhook));
-router.post('/evolution', asyncHandler(handleEvolutionWebhook));
+router.post('/:instanceKey/evolution', asyncHandler(handleEvolutionWebhook));
+// router.post('/evolution', asyncHandler(handleEvolutionWebhook)); // Deprecated
 
 module.exports = router;

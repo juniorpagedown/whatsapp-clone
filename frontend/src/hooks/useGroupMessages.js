@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { chatService } from '../services/chat.service';
 import { buildApiUrl } from '../utils/api';
 const PAGE_SIZE = 50;
 
@@ -77,30 +78,17 @@ export const useGroupMessages = (chatId) => {
     try {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams({
+      const params = {
         chatId,
         limit: PAGE_SIZE
-      });
+      };
       if (before) {
-        params.append('before', before);
+        params.before = before;
       }
 
-      const token = localStorage.getItem('token');
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const data = await chatService.listMessages(params, controller.signal);
 
-      const response = await fetch(`${buildApiUrl('/api/mensagens')}?${params.toString()}`, {
-        signal: controller.signal,
-        headers
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao carregar mensagens (${response.status})`);
-      }
-
-      const payload = await response.json();
+      const payload = data;
       const source = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
       const normalized = source.map(normalizeMessage).filter(Boolean);
 
