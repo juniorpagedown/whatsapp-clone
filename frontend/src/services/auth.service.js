@@ -1,30 +1,32 @@
-import axios from 'axios';
+import api from './api';
 
 export const authService = {
     login: async (email, password) => {
-        const response = await axios.post('/api/auth/login', { email, password });
+        const response = await api.post('/auth/login', { email, password });
         return response.data;
     },
 
     register: async (userData) => {
-        const response = await axios.post('/api/auth/register', userData);
+        const response = await api.post('/auth/register', userData);
         return response.data;
     },
 
     logout: async () => {
-        await axios.post('/api/auth/logout');
+        await api.post('/auth/logout');
     },
 
     getMe: async () => {
-        const response = await axios.get('/api/auth/me');
+        const response = await api.get('/auth/me');
         return response.data;
     },
 
     setAuthToken: (token) => {
         if (token) {
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            localStorage.setItem('token', token);
+            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         } else {
-            delete axios.defaults.headers.common['Authorization'];
+            localStorage.removeItem('token');
+            delete api.defaults.headers.common['Authorization'];
         }
     }
 };

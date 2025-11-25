@@ -1,21 +1,23 @@
-import axios from 'axios';
+import api from './api';
 
 export const instanceService = {
     listInstances: async () => {
-        const response = await axios.get('/api/instances');
+        const response = await api.get('/instances');
         return response.data;
     },
 
     createInstance: async (data) => {
-        const response = await axios.post('/api/instances', data);
+        const response = await api.post('/instances', data);
         return response.data;
     },
 
     setInstanceId: (instanceId) => {
         if (instanceId) {
-            axios.defaults.headers.common['x-instance-id'] = instanceId;
+            localStorage.setItem('selected_instance_id', instanceId);
+            api.defaults.headers.common['x-instance-id'] = instanceId;
         } else {
-            delete axios.defaults.headers.common['x-instance-id'];
+            localStorage.removeItem('selected_instance_id');
+            delete api.defaults.headers.common['x-instance-id'];
         }
     }
 };

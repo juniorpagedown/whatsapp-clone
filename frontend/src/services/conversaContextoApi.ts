@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { buildApiUrl } from '../utils/api';
+import api from './api';
 
 export type ConversaContextoItem = {
   id: number;
@@ -107,7 +106,7 @@ export const fetchConversationContexts = async ({
   if (q) params.q = q;
 
   try {
-    const response = await axios.get(buildApiUrl(`/api/conversas/${conversaId}/contextos`), {
+    const response = await api.get(`/conversas/${conversaId}/contextos`, {
       params,
       signal
     });
@@ -136,36 +135,22 @@ export const fetchConversationContexts = async ({
 };
 
 export const fetchConversationsWithContext = async (): Promise<ConversaComContexto[]> => {
-  const token = localStorage.getItem('token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  };
+  try {
+    const response = await api.get('/conversas/contextos/disponiveis');
+    const payload = response.data;
+    const items = Array.isArray(payload?.data) ? payload.data : [];
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(buildApiUrl('/api/conversas/contextos/disponiveis'), {
-    method: 'GET',
-    headers
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    const message = payload?.error?.message || 'Erro ao carregar conversas com contexto';
+    return items.map((item: any) => ({
+      conversa_id: Number(item.conversa_id),
+      chat_id: String(item.chat_id),
+      tipo: item.tipo,
+      grupo_id: item.grupo_id === null || item.grupo_id === undefined ? null : Number(item.grupo_id),
+      nome: typeof item.nome === 'string' ? item.nome : String(item.chat_id),
+      total_contextos: Number(item.total_contextos || 0),
+      ultimo_periodo: item.ultimo_periodo || null
+    }));
+  } catch (error: any) {
+    const message = error.response?.data?.error?.message || error.message || 'Erro ao carregar conversas com contexto';
     throw new Error(message);
   }
-
-  const payload = await response.json();
-  const items = Array.isArray(payload?.data) ? payload.data : [];
-
-  return items.map((item: any) => ({
-    conversa_id: Number(item.conversa_id),
-    chat_id: String(item.chat_id),
-    tipo: item.tipo,
-    grupo_id: item.grupo_id === null || item.grupo_id === undefined ? null : Number(item.grupo_id),
-    nome: typeof item.nome === 'string' ? item.nome : String(item.chat_id),
-    total_contextos: Number(item.total_contextos || 0),
-    ultimo_periodo: item.ultimo_periodo || null
-  }));
 };

@@ -17,7 +17,9 @@ const pool = new Pool({
   password: dbPassword,
   max: parseInt(process.env.DB_POOL_MAX) || 20,
   idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT) || 30000,
-  connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT) || 2000
+  connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT) || 2000,
+  // Configurar timezone para todas as conexões
+  options: `-c timezone=${process.env.TZ || 'America/Sao_Paulo'}`
 });
 
 // Event handlers

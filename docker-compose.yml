@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: whatsapp_clone
       POSTGRES_USER: whatsapp_user
       POSTGRES_PASSWORD: Mr92uc73
+      TZ: America/Sao_Paulo
+      PGTZ: America/Sao_Paulo
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
@@ -20,6 +22,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    environment:
+      TZ: America/Sao_Paulo
     ports:
       - "6379:6379"
     volumes:
@@ -32,6 +36,7 @@ services:
       - "3001:3001"
     environment:
       NODE_ENV: development
+      TZ: America/Sao_Paulo
       DB_HOST: whatsapp-clone-postgres-1
       DB_PORT: 5432
       DB_NAME: whatsapp_clone
@@ -59,6 +64,7 @@ services:
     command: node workers/embedding.worker.js
     environment:
       NODE_ENV: development
+      TZ: America/Sao_Paulo
       DB_HOST: whatsapp-clone-postgres-1
       DB_PORT: 5432
       DB_NAME: whatsapp_clone
@@ -82,6 +88,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      TZ: America/Sao_Paulo
       API_URL: http://backend:3001
     depends_on:
       - backend

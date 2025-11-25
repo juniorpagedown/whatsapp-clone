@@ -34,12 +34,13 @@ const GroupsPage = () => {
   const activeChatIdRef = useRef(null);
 
   const activeChatId = useMemo(() => {
-    const match = /^\/groups\/(.+)$/.exec(location.pathname);
+    // Suporta tanto /conversas/chat/ quanto /conversas/grupo/
+    const match = /^\/conversas\/(chat|grupo)\/(.+)$/.exec(location.pathname);
     if (!match) return null;
     try {
-      return decodeURIComponent(match[1]);
+      return decodeURIComponent(match[2]);
     } catch (error) {
-      return match[1];
+      return match[2];
     }
   }, [location.pathname]);
 

@@ -1,5 +1,9 @@
 FROM node:18-alpine
 
+# Configurar timezone
+ENV TZ=America/Sao_Paulo
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 
 COPY package*.json ./
